@@ -4,25 +4,34 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Telegram DOOM</title>
+    
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     
-    <!-- Надежная версия эмулятора -->
     <script src="https://js-dos.com/v7/build/releases/latest/js-dos/js-dos.js"></script>
     <link href="https://js-dos.com/v7/build/releases/latest/js-dos/js-dos.css" rel="stylesheet">
     
     <style>
-        html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
-        #jsdos { width: 100%; height: 100%; }
+        html, body, #jsdos {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            overflow: hidden;
+        }
     </style>
 </head>
 <body>
     <div id="jsdos"></div>
+    
     <script>
         Telegram.WebApp.expand();
-        // Теперь мы берем игру прямо из твоего GitHub!
-        Dos(document.getElementById("jsdos"), {
-            url: "doom.jsdos" 
-        });
+
+        emulators.pathPrefix = "https://js-dos.com/v7/build/releases/latest/js-dos/";
+
+        // Берем файл doom.jsdos прямо из твоего GitHub, рядом с index.html
+        // Никаких чужих серверов и битых ссылок!
+        Dos(document.getElementById("jsdos")).run("doom.jsdos");
     </script>
 </body>
 </html>
