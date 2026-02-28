@@ -5,27 +5,36 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Telegram DOOM</title>
     
-    <!-- Скрипт Telegram для работы внутри мессенджера -->
+    <!-- Скрипт Telegram -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     
+    <!-- Подключаем самую новую версию JS-DOS v8 -->
+    <link rel="stylesheet" href="https://v8.js-dos.com/latest/js-dos.css">
+    <script src="https://v8.js-dos.com/latest/js-dos.js"></script>
+    
     <style>
-        html, body {
-            margin: 0; padding: 0; width: 100%; height: 100%;
-            background-color: #000; overflow: hidden;
-        }
-        /* Убираем рамки у плеера и растягиваем на весь экран */
-        iframe {
-            width: 100%; height: 100%; border: none;
+        html, body, #jsdos {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            overflow: hidden;
         }
     </style>
 </head>
 <body>
-    <!-- Используем специальный технический домен app.js-dos.com, который разрешает встраивание -->
-    <iframe src="https://app.js-dos.com/?anonymous=1&bundleUrl=https://cdn.dos.zone/custom/dos/doom.jsdos"></iframe>
-
+    <!-- Контейнер для игры -->
+    <div id="jsdos"></div>
+    
     <script>
-        // Растягиваем окно в Телеграме
+        // Растягиваем на весь экран в Телеграме
         Telegram.WebApp.expand();
+
+        // Запускаем Doom напрямую через новый API v8
+        Dos(document.getElementById("jsdos"), {
+            url: "https://cdn.dos.zone/custom/dos/doom.jsdos"
+        });
     </script>
 </body>
 </html>
