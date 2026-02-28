@@ -4,25 +4,36 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Telegram DOOM</title>
+    
+    <!-- Скрипт Telegram -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     
-    <!-- Надежная версия эмулятора -->
+    <!-- Подключаем эмулятор JS-DOS -->
     <script src="https://js-dos.com/v7/build/releases/latest/js-dos/js-dos.js"></script>
     <link href="https://js-dos.com/v7/build/releases/latest/js-dos/js-dos.css" rel="stylesheet">
     
     <style>
-        html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
-        #jsdos { width: 100%; height: 100%; }
+        html, body, #jsdos {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            overflow: hidden;
+        }
     </style>
 </head>
 <body>
     <div id="jsdos"></div>
+    
     <script>
         Telegram.WebApp.expand();
-        // Теперь мы берем игру прямо из твоего GitHub!
-        Dos(document.getElementById("jsdos"), {
-            url: "doom.jsdos" 
-        });
+
+        // ВОТ ТА САМАЯ СТРОКА: Указываем эмулятору, откуда качать ядро. Без нее была бесконечная загрузка!
+        emulators.pathPrefix = "https://js-dos.com/v7/build/releases/latest/js-dos/";
+
+        // Запускаем Doom напрямую по надежной ссылке
+        Dos(document.getElementById("jsdos")).run("https://cdn.dos.zone/original/2X/2/24b00b14f118580763440ecaddcc948f8cb94f14.jsdos");
     </script>
 </body>
 </html>
