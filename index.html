@@ -4,40 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Telegram DOOM</title>
-    
-    <!-- Скрипт Telegram Web App для работы внутри мессенджера -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     
-    <!-- Подключаем самую свежую версию движка JS-DOS v8 -->
-    <link rel="stylesheet" href="https://v8.js-dos.com/latest/js-dos.css">
-    <script src="https://v8.js-dos.com/latest/js-dos.js"></script>
-
+    <!-- Надежная версия эмулятора -->
+    <script src="https://js-dos.com/v7/build/releases/latest/js-dos/js-dos.js"></script>
+    <link href="https://js-dos.com/v7/build/releases/latest/js-dos/js-dos.css" rel="stylesheet">
+    
     <style>
-        html, body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            background-color: #000;
-            overflow: hidden; /* Убираем ползунки */
-        }
-        /* Блок, где будет жить наша игра */
-        #jsdos {
-            width: 100%;
-            height: 100%;
-        }
+        html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+        #jsdos { width: 100%; height: 100%; }
     </style>
 </head>
 <body>
     <div id="jsdos"></div>
-
     <script>
-        // Говорим Телеграму развернуть окно на весь экран телефона
         Telegram.WebApp.expand();
-
-        // Инициализируем наш собственный плеер и скармливаем ему архив с DOOM
+        // Теперь мы берем игру прямо из твоего GitHub!
         Dos(document.getElementById("jsdos"), {
-            url: "https://cdn.dos.zone/custom/dos/doom.jsdos"
+            url: "doom.jsdos" 
         });
     </script>
 </body>
