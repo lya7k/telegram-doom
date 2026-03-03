@@ -8,7 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; touch-action: none; user-select: none; -webkit-user-select: none; font-family: sans-serif; }
-        #game-canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; } /* Резкие пиксели */
+        #game-canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; } 
         
         #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
         #look-zone { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; z-index: 1; }
@@ -74,68 +74,104 @@
     </div>
 
     <script>
+        // === МАГИЯ АУДИО (Синтезатор звуков 90-х) ===
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioContext();
+
+        const SFX = {
+            playNoise: (duration, freq) => {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const bufferSize = audioCtx.sampleRate * duration;
+                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                
+                const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
+                const filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = freq;
+                const gain = audioCtx.createGain(); gain.gain.setValueAtTime(1, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+                
+                noise.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+                noise.start();
+            },
+            shootPistol: () => SFX.playNoise(0.15, 2000), // Звонкий хлопок
+            shootShotgun: () => SFX.playNoise(0.3, 500),  // Басовый мощный взрыв
+            shootAuto: () => SFX.playNoise(0.1, 3000),    // Короткий треск
+            
+            reload: () => {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.type = 'square'; osc.frequency.setValueAtTime(800, audioCtx.currentTime); osc.frequency.setValueAtTime(1200, audioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.5, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+                osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+            },
+            
+            enemyHit: () => {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(300, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.5, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
+                osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+            },
+            
+            playerHurt: () => {
+                SFX.playNoise(0.2, 300); // Глухой удар
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.type = 'square'; osc.frequency.setValueAtTime(150, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.2);
+                gain.gain.setValueAtTime(1, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
+                osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+            }
+        };
+
+        // ТЕЛЕГРАМ АПИ (Плюс включение звука при первом тапе)
         const tg = window.Telegram.WebApp;
-        document.body.addEventListener('pointerdown', () => { if (tg.requestFullscreen && !tg.isFullscreen) tg.requestFullscreen(); }, { once: true });
+        document.body.addEventListener('pointerdown', () => { 
+            if (tg.requestFullscreen && !tg.isFullscreen) tg.requestFullscreen(); 
+            if (audioCtx.state === 'suspended') audioCtx.resume(); // Браузеры требуют клика для включения звука!
+        }, { once: true });
         if (tg.setHeaderColor) { tg.setHeaderColor('#000000'); tg.setBackgroundColor('#000000'); }
         tg.expand(); if (tg.isVersionAtLeast("6.9")) tg.disableVerticalSwipes(); tg.enableClosingConfirmation();
 
-        // === ГЕНЕРАТОР РЕТРО-ТЕКСТУР (Pixel Art) ===
+        // === ГЕНЕРАТОР РЕТРО-ТЕКСТУР ===
         function createTexture(type) {
-            const canvas = document.createElement('canvas');
-            canvas.width = 64; canvas.height = 64;
-            const ctx = canvas.getContext('2d');
-
+            const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 64; const ctx = canvas.getContext('2d');
             if (type === 'floor') {
-                // Марсианская плитка
-                ctx.fillStyle = '#3a2522'; ctx.fillRect(0,0,64,64);
-                ctx.fillStyle = '#4a302c';
+                ctx.fillStyle = '#3a2522'; ctx.fillRect(0,0,64,64); ctx.fillStyle = '#4a302c';
                 for(let i=0; i<64; i+=16) for(let j=0; j<64; j+=16) if((i+j)%32===0) ctx.fillRect(i,j,16,16);
                 ctx.strokeStyle = '#221513'; ctx.lineWidth = 2;
                 for(let i=0; i<=64; i+=16) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,64); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(64,i); ctx.stroke(); }
             } else if (type === 'wall') {
-                // Серые кирпичи как в DOOM
-                ctx.fillStyle = '#555'; ctx.fillRect(0,0,64,64);
-                ctx.strokeStyle = '#222'; ctx.lineWidth = 2;
+                ctx.fillStyle = '#555'; ctx.fillRect(0,0,64,64); ctx.strokeStyle = '#222'; ctx.lineWidth = 2;
                 for(let y=0; y<64; y+=16) {
-                    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(64,y); ctx.stroke();
-                    let offset = (y/16)%2 === 0 ? 0 : 16;
+                    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(64,y); ctx.stroke(); let offset = (y/16)%2 === 0 ? 0 : 16;
                     for(let x=offset; x<64; x+=32) { ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x,y+16); ctx.stroke(); }
                 }
             } else if (type === 'enemy') {
-                // Жуткое лицо Киборга-Демона
-                ctx.fillStyle = '#800000'; ctx.fillRect(0,0,64,64); // Темно-красная кожа
-                ctx.fillStyle = '#ff0000'; ctx.fillRect(12,20,12,8); ctx.fillRect(40,20,12,8); // Горящие красные глаза
-                ctx.fillStyle = '#000000'; ctx.fillRect(20,40,24,12); // Рот
-                ctx.fillStyle = '#ffffff'; ctx.fillRect(22,40,4,6); ctx.fillRect(38,40,4,6); // Клыки
-                ctx.fillStyle = '#555555'; ctx.fillRect(0,0,64,8); // Металлическая пластина на лбу
+                ctx.fillStyle = '#800000'; ctx.fillRect(0,0,64,64); 
+                ctx.fillStyle = '#ff0000'; ctx.fillRect(12,20,12,8); ctx.fillRect(40,20,12,8); 
+                ctx.fillStyle = '#000000'; ctx.fillRect(20,40,24,12); 
+                ctx.fillStyle = '#ffffff'; ctx.fillRect(22,40,4,6); ctx.fillRect(38,40,4,6); 
+                ctx.fillStyle = '#555555'; ctx.fillRect(0,0,64,8); 
             }
-
-            const tex = new THREE.CanvasTexture(canvas);
-            tex.magFilter = THREE.NearestFilter; // Жесткий пиксель-арт без размытия!
-            return tex;
+            const tex = new THREE.CanvasTexture(canvas); tex.magFilter = THREE.NearestFilter; return tex;
         }
 
-        const texFloor = createTexture('floor');
-        texFloor.wrapS = THREE.RepeatWrapping; texFloor.wrapT = THREE.RepeatWrapping;
-        texFloor.repeat.set(20, 20); // Повторяем текстуру по всему полу
-
-        const texWall = createTexture('wall');
-        texWall.wrapS = THREE.RepeatWrapping; texWall.wrapT = THREE.RepeatWrapping;
-
+        const texFloor = createTexture('floor'); texFloor.wrapS = THREE.RepeatWrapping; texFloor.wrapT = THREE.RepeatWrapping; texFloor.repeat.set(20, 20);
+        const texWall = createTexture('wall'); texWall.wrapS = THREE.RepeatWrapping; texWall.wrapT = THREE.RepeatWrapping;
         const texEnemy = createTexture('enemy');
 
         // === ИГРОВОЕ СОСТОЯНИЕ ===
         let playerHealth = 100; let isGameOver = false; let kills = 0;
-        const healthBar = document.getElementById('health-bar');
-        const damageOverlay = document.getElementById('damage-overlay');
-        const gameOverScreen = document.getElementById('game-over-screen');
-        const finalScore = document.getElementById('final-score');
+        const healthBar = document.getElementById('health-bar'); const damageOverlay = document.getElementById('damage-overlay');
+        const gameOverScreen = document.getElementById('game-over-screen'); const finalScore = document.getElementById('final-score');
         const killCounter = document.getElementById('kill-counter');
 
         function takeDamage(amount) {
             if (isGameOver) return; playerHealth -= amount; if (playerHealth < 0) playerHealth = 0;
             healthBar.style.width = playerHealth + '%';
             damageOverlay.style.opacity = 1; setTimeout(() => { damageOverlay.style.opacity = 0; }, 150);
+            SFX.playerHurt(); // ЗВУК УРОНА
+
             if (playerHealth === 0) {
                 isGameOver = true; finalScore.innerText = kills; gameOverScreen.style.opacity = 1; gameOverScreen.style.pointerEvents = 'auto';
                 joyPointerId = null; lookPointerId = null; moveForward = 0; moveRight = 0;
@@ -154,9 +190,9 @@
 
         // === ОРУЖИЕ ===
         const weapons =[
-            { name: "ПИСТОЛЕТ", damage: 35, maxAmmo: 12, recoil: 0.05, reloadTime: 1000, fireRate: 300, color: 0x888888, size:[0.08, 0.1, 0.3] },
-            { name: "ДРОБОВИК", damage: 100, maxAmmo: 6, recoil: 0.15, reloadTime: 2000, fireRate: 800, color: 0x333333, size:[0.15, 0.1, 0.5] },
-            { name: "АВТОМАТ", damage: 20, maxAmmo: 30, recoil: 0.02, reloadTime: 1500, fireRate: 100, color: 0x2e4a2e, size:[0.1, 0.12, 0.45] }
+            { name: "ПИСТОЛЕТ", damage: 35, maxAmmo: 12, recoil: 0.05, reloadTime: 1000, fireRate: 300, color: 0x888888, size:[0.08, 0.1, 0.3], sound: SFX.shootPistol },
+            { name: "ДРОБОВИК", damage: 100, maxAmmo: 6, recoil: 0.15, reloadTime: 2000, fireRate: 800, color: 0x333333, size:[0.15, 0.1, 0.5], sound: SFX.shootShotgun },
+            { name: "АВТОМАТ", damage: 20, maxAmmo: 30, recoil: 0.02, reloadTime: 1500, fireRate: 100, color: 0x2e4a2e, size:[0.1, 0.12, 0.45], sound: SFX.shootAuto }
         ];
         let currentWeaponIdx = 0; let ammo = weapons[0].maxAmmo; let isReloading = false; let lastFireTime = 0;
         const ammoDisplay = document.getElementById('ammo-display');
@@ -170,12 +206,12 @@
         document.getElementById('weapon-btn').addEventListener('pointerdown', (e) => {
             e.preventDefault(); if (isReloading || isGameOver) return; 
             currentWeaponIdx = (currentWeaponIdx + 1) % weapons.length;
-            ammo = weapons[currentWeaponIdx].maxAmmo; updateHUD(); buildWeaponModel();
+            ammo = weapons[currentWeaponIdx].maxAmmo; updateHUD(); buildWeaponModel(); SFX.reload();
         });
 
         document.getElementById('reload-btn').addEventListener('pointerdown', (e) => {
             e.preventDefault(); if (isReloading || ammo === weapons[currentWeaponIdx].maxAmmo || isGameOver) return;
-            isReloading = true; updateHUD(); weaponBasePos.y = -0.5;
+            isReloading = true; updateHUD(); weaponBasePos.y = -0.5; SFX.reload(); // ЗВУК ПЕРЕЗАРЯДКИ
             setTimeout(() => { ammo = weapons[currentWeaponIdx].maxAmmo; isReloading = false; updateHUD(); weaponBasePos.y = -0.25; }, weapons[currentWeaponIdx].reloadTime);
         });
 
@@ -199,57 +235,38 @@
         }
         buildWeaponModel();
 
-        const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('game-canvas'), antialias: false }); // Antialias: false для ретро-эффекта
+        const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('game-canvas'), antialias: false });
         renderer.setSize(window.innerWidth, window.innerHeight);
 
         const light = new THREE.HemisphereLight(0xffffff, 0x444444, 0.8); light.position.set(0, 20, 0); scene.add(light);
 
-        // ПОЛ (Арена 60х60)
         const arenaSize = 60;
-        const floorGeo = new THREE.PlaneGeometry(arenaSize, arenaSize); 
-        const floorMat = new THREE.MeshLambertMaterial({ map: texFloor });
+        const floorGeo = new THREE.PlaneGeometry(arenaSize, arenaSize); const floorMat = new THREE.MeshLambertMaterial({ map: texFloor });
         const floor = new THREE.Mesh(floorGeo, floorMat); floor.rotation.x = -Math.PI / 2; scene.add(floor);
 
-        // СТЕНЫ АРЕНЫ (Забор)
-        const wallMat = new THREE.MeshLambertMaterial({ map: texWall });
-        texWall.repeat.set(arenaSize/4, 2); // Масштабируем кирпичи на стене
-        
-        const wallGeoH = new THREE.BoxGeometry(arenaSize, 8, 2);
-        const wallGeoV = new THREE.BoxGeometry(2, 8, arenaSize);
-        
-        const wN = new THREE.Mesh(wallGeoH, wallMat); wN.position.set(0, 4, -arenaSize/2); scene.add(wN); // Север
-        const wS = new THREE.Mesh(wallGeoH, wallMat); wS.position.set(0, 4, arenaSize/2); scene.add(wS); // Юг
-        const wW = new THREE.Mesh(wallGeoV, wallMat); wW.position.set(-arenaSize/2, 4, 0); scene.add(wW); // Запад
-        const wE = new THREE.Mesh(wallGeoV, wallMat); wE.position.set(arenaSize/2, 4, 0); scene.add(wE); // Восток
+        const wallMat = new THREE.MeshLambertMaterial({ map: texWall }); texWall.repeat.set(arenaSize/4, 2); 
+        const wallGeoH = new THREE.BoxGeometry(arenaSize, 8, 2); const wallGeoV = new THREE.BoxGeometry(2, 8, arenaSize);
+        const wN = new THREE.Mesh(wallGeoH, wallMat); wN.position.set(0, 4, -arenaSize/2); scene.add(wN); 
+        const wS = new THREE.Mesh(wallGeoH, wallMat); wS.position.set(0, 4, arenaSize/2); scene.add(wS); 
+        const wW = new THREE.Mesh(wallGeoV, wallMat); wW.position.set(-arenaSize/2, 4, 0); scene.add(wW); 
+        const wE = new THREE.Mesh(wallGeoV, wallMat); wE.position.set(arenaSize/2, 4, 0); scene.add(wE); 
 
-        // ВНУТРЕННИЕ КОЛОННЫ (Укрытия)
-        const pillarGeo = new THREE.BoxGeometry(4, 8, 4);
-        const pillarMat = new THREE.MeshLambertMaterial({ map: texWall });
-        const texPillar = texWall.clone(); texPillar.repeat.set(1, 2); pillarMat.map = texPillar; // Копируем текстуру для колонн
-
+        const pillarGeo = new THREE.BoxGeometry(4, 8, 4); const pillarMat = new THREE.MeshLambertMaterial({ map: texWall });
+        const texPillar = texWall.clone(); texPillar.repeat.set(1, 2); pillarMat.map = texPillar; 
         for(let i = 0; i < 15; i++) {
             const pillar = new THREE.Mesh(pillarGeo, pillarMat);
-            let px = (Math.random() - 0.5) * (arenaSize - 10);
-            let pz = (Math.random() - 0.5) * (arenaSize - 10);
-            if(Math.abs(px) < 5 && Math.abs(pz) < 5) px += 10; // Не ставим колонну на голову игроку
-            pillar.position.set(px, 4, pz);
-            scene.add(pillar);
+            let px = (Math.random() - 0.5) * (arenaSize - 10); let pz = (Math.random() - 0.5) * (arenaSize - 10);
+            if(Math.abs(px) < 5 && Math.abs(pz) < 5) px += 10; 
+            pillar.position.set(px, 4, pz); scene.add(pillar);
         }
 
-        // === ВРАГИ С ТЕКСТУРОЙ ===
-        const enemies =[]; 
-        const enemyGeo = new THREE.BoxGeometry(1.6, 2.4, 1.6);
+        const enemies =[]; const enemyGeo = new THREE.BoxGeometry(1.6, 2.4, 1.6);
         function spawnEnemy() {
             const enemyMat = new THREE.MeshLambertMaterial({ map: texEnemy });
             const enemy = new THREE.Mesh(enemyGeo, enemyMat);
-            
-            let ex = (Math.random() - 0.5) * (arenaSize - 4);
-            let ez = (Math.random() - 0.5) * (arenaSize - 4);
-            if (Math.abs(ex) < 10) ex += 20 * Math.sign(ex || 1);
-            if (Math.abs(ez) < 10) ez += 20 * Math.sign(ez || 1);
-
-            enemy.position.set(ex, 1.2, ez);
-            enemy.health = 100; enemy.lastAttack = 0; 
+            let ex = (Math.random() - 0.5) * (arenaSize - 4); let ez = (Math.random() - 0.5) * (arenaSize - 4);
+            if (Math.abs(ex) < 10) ex += 20 * Math.sign(ex || 1); if (Math.abs(ez) < 10) ez += 20 * Math.sign(ez || 1);
+            enemy.position.set(ex, 1.2, ez); enemy.health = 100; enemy.lastAttack = 0; 
             scene.add(enemy); enemies.push(enemy);
         }
         for(let i = 0; i < 10; i++) spawnEnemy();
@@ -284,13 +301,17 @@
             pitch += w.recoil; yaw += (Math.random() - 0.5) * w.recoil * 0.5;
             weaponGroup.position.z += 0.15; weaponGroup.rotation.x += 0.2; muzzleFlash.intensity = 2;
 
+            w.sound(); // ВОСПРОИЗВЕДЕНИЕ ЗВУКА ВЫСТРЕЛА
+
             raycaster.setFromCamera(screenCenter, camera);
             const intersects = raycaster.intersectObjects(enemies);
             if (intersects.length > 0) {
                 const hitEnemy = intersects[0].object;
                 hitEnemy.health -= w.damage;
-                hitEnemy.material.color.setHex(0xffffff); // Мигание
-                setTimeout(() => { if(hitEnemy.parent) hitEnemy.material.color.setHex(0xffffff); }, 100); // Возврат текстуры (белый фильтр)
+                hitEnemy.material.color.setHex(0xffffff);
+                setTimeout(() => { if(hitEnemy.parent) hitEnemy.material.color.setHex(0xffffff); }, 100);
+
+                SFX.enemyHit(); // ЗВУК ПОПАДАНИЯ ВО ВРАГА
 
                 if (hitEnemy.health <= 0) {
                     scene.remove(hitEnemy); enemies.splice(enemies.indexOf(hitEnemy), 1);
@@ -339,7 +360,6 @@
                     const time = Date.now() * 0.005; weaponGroup.position.y = weaponBasePos.y + Math.sin(time) * 0.02; weaponGroup.position.x = weaponBasePos.x + Math.cos(time) * 0.01;
                 }
 
-                // ПРОВЕРКА ГРАНИЦ АРЕНЫ (Чтобы игрок не уходил за стены)
                 let nextX = camera.position.x - moveForward * speed * direction.x + moveRight * speed * rightVector.x;
                 let nextZ = camera.position.z - moveForward * speed * direction.z + moveRight * speed * rightVector.z;
                 
@@ -347,8 +367,7 @@
                 if (nextX > bound) nextX = bound; if (nextX < -bound) nextX = -bound;
                 if (nextZ > bound) nextZ = bound; if (nextZ < -bound) nextZ = -bound;
 
-                camera.position.x = nextX;
-                camera.position.z = nextZ;
+                camera.position.x = nextX; camera.position.z = nextZ;
             }
 
             renderer.render(scene, camera);
