@@ -7,21 +7,30 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; touch-action: none; user-select: none; -webkit-user-select: none; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; touch-action: none; user-select: none; -webkit-user-select: none; font-family: sans-serif; }
         #game-canvas { width: 100%; height: 100%; display: block; }
         
         #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
-        
-        /* ЗОНА ОБЗОРА */
         #look-zone { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; z-index: 1; }
-        
         .crosshair { position: absolute; top: 50%; left: 50%; width: 6px; height: 6px; background: #0f0; transform: translate(-50%, -50%); border-radius: 50%; box-shadow: 0 0 5px #0f0; z-index: 2; pointer-events: none; }
         
+        /* ВЕРХНЯЯ ПАНЕЛЬ (Патроны и Смена оружия) */
+        #hud-top { position: absolute; top: 20px; left: 20px; right: 20px; display: flex; justify-content: space-between; z-index: 10; pointer-events: none; }
+        #ammo-display { background: rgba(0,0,0,0.5); color: #fff; padding: 10px 20px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); font-weight: bold; font-size: 16px; backdrop-filter: blur(2px); }
+        #weapon-btn { background: rgba(255,255,255,0.2); color: #fff; padding: 10px 20px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.5); font-weight: bold; pointer-events: auto; backdrop-filter: blur(2px); transition: 0.1s; }
+        #weapon-btn:active { transform: scale(0.9); background: rgba(255,255,255,0.4); }
+
+        /* ЛЕВЫЙ ДЖОЙСТИК */
         #joy-left { position: absolute; bottom: 30px; left: 30px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2); border-radius: 50%; pointer-events: auto; backdrop-filter: blur(2px); z-index: 10; }
         #joy-stick { position: absolute; top: 30px; left: 30px; width: 60px; height: 60px; background: rgba(255,255,255,0.6); border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.5); pointer-events: none; }
         
-        #shoot-btn { position: absolute; bottom: 40px; right: 40px; width: 80px; height: 80px; background: rgba(255,50,50,0.4); border-radius: 50%; pointer-events: auto; color: white; line-height: 80px; text-align: center; font-weight: bold; font-family: sans-serif; font-size: 18px; border: 2px solid rgba(255,50,50,0.8); backdrop-filter: blur(2px); z-index: 10; }
-        #shoot-btn:active { background: rgba(255,50,50,0.8); transform: scale(0.9); }
+        /* ПРАВЫЕ КНОПКИ (Стрельба, Прыжок, Перезарядка) */
+        .action-btn { position: absolute; border-radius: 50%; pointer-events: auto; color: white; display: flex; justify-content: center; align-items: center; font-weight: bold; backdrop-filter: blur(2px); z-index: 10; transition: transform 0.1s; }
+        .action-btn:active { transform: scale(0.85); }
+        
+        #shoot-btn { bottom: 40px; right: 40px; width: 80px; height: 80px; background: rgba(255,50,50,0.4); border: 2px solid rgba(255,50,50,0.8); font-size: 18px; }
+        #jump-btn { bottom: 140px; right: 40px; width: 60px; height: 60px; background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.5); font-size: 14px; }
+        #reload-btn { bottom: 40px; right: 140px; width: 60px; height: 60px; background: rgba(100,200,255,0.3); border: 2px solid rgba(100,200,255,0.6); font-size: 12px; text-align: center; line-height: 1.2; }
     </style>
 </head>
 <body>
@@ -30,43 +39,87 @@
     <div id="ui-layer">
         <div id="look-zone"></div>
         <div class="crosshair"></div>
+        
+        <div id="hud-top">
+            <div id="ammo-display">ПИСТОЛЕТ: 12 / 12</div>
+            <div id="weapon-btn">🔄 СМЕНИТЬ</div>
+        </div>
+
         <div id="joy-left"><div id="joy-stick"></div></div>
-        <div id="shoot-btn">FIRE</div>
+        
+        <div id="shoot-btn" class="action-btn">FIRE</div>
+        <div id="jump-btn" class="action-btn">JUMP</div>
+        <div id="reload-btn" class="action-btn">RELOAD</div>
     </div>
 
     <script>
-        // === 1. МАГИЯ TELEGRAM (Убиваем плашку и делаем Fullscreen) ===
+        // === ТЕЛЕГРАМ АПИ ===
         const tg = window.Telegram.WebApp;
-        
-        // Пытаемся развернуть в Fullscreen сразу при старте
-        if (tg.requestFullscreen) {
-            try { tg.requestFullscreen(); } catch (e) {}
-        }
-        
-        // Надежный метод: Разворачиваем в Fullscreen при ПЕРВОМ касании экрана
         document.body.addEventListener('pointerdown', () => {
-            if (tg.requestFullscreen && !tg.isFullscreen) {
-                tg.requestFullscreen();
-            }
+            if (tg.requestFullscreen && !tg.isFullscreen) tg.requestFullscreen();
         }, { once: true });
-
-        // Красим верхнюю плашку в черный (для старых версий Телеграма)
-        if (tg.setHeaderColor) {
-            tg.setHeaderColor('#000000');
-            tg.setBackgroundColor('#000000');
-        }
-
+        if (tg.setHeaderColor) { tg.setHeaderColor('#000000'); tg.setBackgroundColor('#000000'); }
         tg.expand();
         if (tg.isVersionAtLeast("6.9")) tg.disableVerticalSwipes();
         tg.enableClosingConfirmation();
 
-        // === 2. 3D ДВИЖОК ===
+        // === ОРУЖИЕ И ПАТРОНЫ ===
+        const weapons =[
+            { name: "ПИСТОЛЕТ", maxAmmo: 12, recoil: 0.05, reloadTime: 1000, fireRate: 300 },
+            { name: "ДРОБОВИК", maxAmmo: 6, recoil: 0.15, reloadTime: 2000, fireRate: 800 },
+            { name: "АВТОМАТ", maxAmmo: 30, recoil: 0.02, reloadTime: 1500, fireRate: 100 }
+        ];
+        let currentWeaponIdx = 0;
+        let ammo = weapons[currentWeaponIdx].maxAmmo;
+        let isReloading = false;
+        let lastFireTime = 0;
+
+        const ammoDisplay = document.getElementById('ammo-display');
+        function updateHUD() {
+            if (isReloading) {
+                ammoDisplay.innerText = `ПЕРЕЗАРЯДКА...`;
+                ammoDisplay.style.color = "#ffaa00";
+            } else {
+                const w = weapons[currentWeaponIdx];
+                ammoDisplay.innerText = `${w.name}: ${ammo} / ${w.maxAmmo}`;
+                ammoDisplay.style.color = ammo === 0 ? "#ff5555" : "#ffffff";
+            }
+        }
+
+        document.getElementById('weapon-btn').addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            if (isReloading) return; // Нельзя менять во время перезарядки
+            currentWeaponIdx = (currentWeaponIdx + 1) % weapons.length;
+            ammo = weapons[currentWeaponIdx].maxAmmo; // Даем полный магазин при смене (пока так)
+            updateHUD();
+        });
+
+        document.getElementById('reload-btn').addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            if (isReloading || ammo === weapons[currentWeaponIdx].maxAmmo) return;
+            isReloading = true;
+            updateHUD();
+            setTimeout(() => {
+                ammo = weapons[currentWeaponIdx].maxAmmo;
+                isReloading = false;
+                updateHUD();
+            }, weapons[currentWeaponIdx].reloadTime);
+        });
+
+        // === 3D ДВИЖОК ===
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x1a1a1a);
         scene.fog = new THREE.Fog(0x1a1a1a, 0, 40);
 
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.y = 1.6;
+        
+        // ФИЗИКА ИГРОКА
+        const playerHeight = 1.6;
+        camera.position.y = playerHeight;
+        let velocityY = 0;
+        let isGrounded = true;
+        const gravity = -25; // Сила притяжения Марса
+        const jumpStrength = 10; // Сила прыжка
 
         const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('game-canvas'), antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -75,12 +128,14 @@
         light.position.set(0, 20, 0);
         scene.add(light);
 
+        // Пол
         const floorGeo = new THREE.PlaneGeometry(100, 100);
         const floorMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
         const floor = new THREE.Mesh(floorGeo, floorMat);
         floor.rotation.x = -Math.PI / 2;
         scene.add(floor);
 
+        // Препятствия
         const boxGeo = new THREE.BoxGeometry(2, 3, 2);
         for(let i = 0; i < 40; i++) {
             const boxMat = new THREE.MeshLambertMaterial({ color: Math.random() * 0xffffff });
@@ -94,104 +149,112 @@
         let yaw = 0; 
         let pitch = 0; 
 
-        // === 3. ДЖОЙСТИК (Ходьба) ===
+        // === УПРАВЛЕНИЕ ===
+        // 1. Джойстик
         const joyLeft = document.getElementById('joy-left');
         const joyStick = document.getElementById('joy-stick');
         let joyPointerId = null; 
         let joyCenter = { x: 0, y: 0 };
 
         joyLeft.addEventListener('pointerdown', e => {
-            e.preventDefault();
-            joyPointerId = e.pointerId; 
-            joyLeft.setPointerCapture(joyPointerId);
+            e.preventDefault(); joyPointerId = e.pointerId; joyLeft.setPointerCapture(joyPointerId);
             const rect = joyLeft.getBoundingClientRect();
             joyCenter = { x: rect.left + rect.width/2, y: rect.top + rect.height/2 };
-            handleJoyMove(e);
-            joyStick.style.transition = 'none';
+            handleJoyMove(e); joyStick.style.transition = 'none';
         });
-
-        joyLeft.addEventListener('pointermove', e => {
-            if (joyPointerId === e.pointerId) { e.preventDefault(); handleJoyMove(e); }
-        });
-
+        joyLeft.addEventListener('pointermove', e => { if (joyPointerId === e.pointerId) { e.preventDefault(); handleJoyMove(e); }});
         const resetJoy = (e) => {
             if (joyPointerId === e.pointerId) {
-                e.preventDefault();
-                joyPointerId = null;
-                joyStick.style.transition = 'transform 0.1s';
-                joyStick.style.transform = `translate(0px, 0px)`;
+                e.preventDefault(); joyPointerId = null;
+                joyStick.style.transition = 'transform 0.1s'; joyStick.style.transform = `translate(0px, 0px)`;
                 moveForward = 0; moveRight = 0;
             }
         };
-        joyLeft.addEventListener('pointerup', resetJoy);
-        joyLeft.addEventListener('pointercancel', resetJoy);
+        joyLeft.addEventListener('pointerup', resetJoy); joyLeft.addEventListener('pointercancel', resetJoy);
 
         function handleJoyMove(event) {
-            let dx = event.clientX - joyCenter.x;
-            let dy = event.clientY - joyCenter.y;
-            const distance = Math.sqrt(dx*dx + dy*dy);
-            const max = 30; 
+            let dx = event.clientX - joyCenter.x; let dy = event.clientY - joyCenter.y;
+            const distance = Math.sqrt(dx*dx + dy*dy); const max = 30; 
             if (distance > max) { dx = (dx/distance)*max; dy = (dy/distance)*max; }
             joyStick.style.transform = `translate(${dx}px, ${dy}px)`;
-            moveRight = dx / max;
-            moveForward = dy / max; 
+            moveRight = dx / max; moveForward = dy / max; 
         }
 
-        // === 4. СВОБОДНЫЙ ОБЗОР ===
+        // 2. Обзор камеры
         const lookZone = document.getElementById('look-zone');
-        let lookPointerId = null; 
-        let lastTouch = { x: 0, y: 0 };
+        let lookPointerId = null; let lastTouch = { x: 0, y: 0 };
 
         lookZone.addEventListener('pointerdown', e => {
-            e.preventDefault();
-            lookPointerId = e.pointerId;
-            lookZone.setPointerCapture(lookPointerId);
-            lastTouch = { x: e.clientX, y: e.clientY };
+            e.preventDefault(); lookPointerId = e.pointerId; lookZone.setPointerCapture(lookPointerId); lastTouch = { x: e.clientX, y: e.clientY };
         });
-
         lookZone.addEventListener('pointermove', e => {
             if (lookPointerId === e.pointerId) {
                 e.preventDefault();
-                const deltaX = e.clientX - lastTouch.x;
-                const deltaY = e.clientY - lastTouch.y;
-                lastTouch = { x: e.clientX, y: e.clientY };
-
-                yaw -= deltaX * 0.005;   
-                pitch -= deltaY * 0.005; 
+                yaw -= (e.clientX - lastTouch.x) * 0.005;   
+                pitch -= (e.clientY - lastTouch.y) * 0.005; 
                 pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, pitch));
+                lastTouch = { x: e.clientX, y: e.clientY };
+            }
+        });
+        const resetLook = (e) => { if (lookPointerId === e.pointerId) { e.preventDefault(); lookPointerId = null; } };
+        lookZone.addEventListener('pointerup', resetLook); lookZone.addEventListener('pointercancel', resetLook);
+
+        // 3. Прыжок
+        document.getElementById('jump-btn').addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            if (isGrounded) {
+                velocityY = jumpStrength;
+                isGrounded = false;
             }
         });
 
-        const resetLook = (e) => {
-            if (lookPointerId === e.pointerId) { e.preventDefault(); lookPointerId = null; }
-        };
-        lookZone.addEventListener('pointerup', resetLook);
-        lookZone.addEventListener('pointercancel', resetLook);
-
-        // === 5. СТРЕЛЬБА ===
-        const shootBtn = document.getElementById('shoot-btn');
-        shootBtn.addEventListener('pointerdown', (e) => {
+        // 4. Огонь
+        document.getElementById('shoot-btn').addEventListener('pointerdown', (e) => {
             e.preventDefault();
-            pitch += 0.05; // Отдача
+            const now = Date.now();
+            const w = weapons[currentWeaponIdx];
+            
+            if (isReloading || ammo <= 0) return; // Нет патронов или перезарядка
+            if (now - lastFireTime < w.fireRate) return; // Скорострельность
+            
+            // Успешный выстрел
+            ammo--;
+            lastFireTime = now;
+            updateHUD();
+            
+            // Отдача (вверх и чуть-чуть вбок)
+            pitch += w.recoil;
+            yaw += (Math.random() - 0.5) * w.recoil * 0.5;
         });
 
-        // === 6. ГЛАВНЫЙ ЦИКЛ И АДАПТАЦИЯ ЭКРАНА ===
+        // === ИГРОВОЙ ЦИКЛ ===
         const clock = new THREE.Clock();
 
         function animate() {
             requestAnimationFrame(animate);
-            const delta = clock.getDelta();
+            const delta = Math.min(clock.getDelta(), 0.1); // Защита от лагов
 
+            // Гравитация и прыжок
+            velocityY += gravity * delta;
+            camera.position.y += velocityY * delta;
+
+            // Столкновение с полом
+            if (camera.position.y <= playerHeight) {
+                camera.position.y = playerHeight;
+                velocityY = 0;
+                isGrounded = true;
+            }
+
+            // Поворот камеры
             const euler = new THREE.Euler(0, 0, 0, 'YXZ');
-            euler.x = pitch;
-            euler.y = yaw;
+            euler.x = pitch; euler.y = yaw;
             camera.quaternion.setFromEuler(euler);
 
+            // Ходьба
             const speed = 7 * delta;
             const direction = new THREE.Vector3();
             camera.getWorldDirection(direction);
-            direction.y = 0; 
-            direction.normalize();
+            direction.y = 0; direction.normalize();
 
             const rightVector = new THREE.Vector3();
             rightVector.crossVectors(direction, camera.up).normalize();
@@ -204,7 +267,6 @@
 
         animate();
 
-        // При повороте телефона пересчитываем размер экрана!
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
