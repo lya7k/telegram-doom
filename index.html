@@ -12,7 +12,7 @@
         
         #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
         
-        /* ЗОНА ОБЗОРА: Занимает весь экран, но находится ПОД кнопками */
+        /* ЗОНА ОБЗОРА */
         #look-zone { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; z-index: 1; }
         
         .crosshair { position: absolute; top: 50%; left: 50%; width: 6px; height: 6px; background: #0f0; transform: translate(-50%, -50%); border-radius: 50%; box-shadow: 0 0 5px #0f0; z-index: 2; pointer-events: none; }
@@ -28,7 +28,6 @@
     <canvas id="game-canvas"></canvas>
     
     <div id="ui-layer">
-        <!-- Невидимая зона на весь экран для поворота камеры -->
         <div id="look-zone"></div>
         <div class="crosshair"></div>
         <div id="joy-left"><div id="joy-stick"></div></div>
@@ -36,12 +35,32 @@
     </div>
 
     <script>
+        // === 1. МАГИЯ TELEGRAM (Убиваем плашку и делаем Fullscreen) ===
         const tg = window.Telegram.WebApp;
+        
+        // Пытаемся развернуть в Fullscreen сразу при старте
+        if (tg.requestFullscreen) {
+            try { tg.requestFullscreen(); } catch (e) {}
+        }
+        
+        // Надежный метод: Разворачиваем в Fullscreen при ПЕРВОМ касании экрана
+        document.body.addEventListener('pointerdown', () => {
+            if (tg.requestFullscreen && !tg.isFullscreen) {
+                tg.requestFullscreen();
+            }
+        }, { once: true });
+
+        // Красим верхнюю плашку в черный (для старых версий Телеграма)
+        if (tg.setHeaderColor) {
+            tg.setHeaderColor('#000000');
+            tg.setBackgroundColor('#000000');
+        }
+
         tg.expand();
         if (tg.isVersionAtLeast("6.9")) tg.disableVerticalSwipes();
         tg.enableClosingConfirmation();
 
-        // --- 3D ДВИЖОК ---
+        // === 2. 3D ДВИЖОК ===
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x1a1a1a);
         scene.fog = new THREE.Fog(0x1a1a1a, 0, 40);
@@ -75,17 +94,16 @@
         let yaw = 0; 
         let pitch = 0; 
 
-        // --- ИДЕАЛЬНЫЙ ЛЕВЫЙ ДЖОЙСТИК (Pointer Events) ---
+        // === 3. ДЖОЙСТИК (Ходьба) ===
         const joyLeft = document.getElementById('joy-left');
         const joyStick = document.getElementById('joy-stick');
-        let joyPointerId = null; // Запоминаем ID пальца на джойстике
+        let joyPointerId = null; 
         let joyCenter = { x: 0, y: 0 };
 
         joyLeft.addEventListener('pointerdown', e => {
             e.preventDefault();
-            joyPointerId = e.pointerId; // Захватываем конкретный палец
+            joyPointerId = e.pointerId; 
             joyLeft.setPointerCapture(joyPointerId);
-            
             const rect = joyLeft.getBoundingClientRect();
             joyCenter = { x: rect.left + rect.width/2, y: rect.top + rect.height/2 };
             handleJoyMove(e);
@@ -93,11 +111,7 @@
         });
 
         joyLeft.addEventListener('pointermove', e => {
-            // Реагируем только если двигается тот самый палец джойстика
-            if (joyPointerId === e.pointerId) {
-                e.preventDefault();
-                handleJoyMove(e);
-            }
+            if (joyPointerId === e.pointerId) { e.preventDefault(); handleJoyMove(e); }
         });
 
         const resetJoy = (e) => {
@@ -119,14 +133,13 @@
             const max = 30; 
             if (distance > max) { dx = (dx/distance)*max; dy = (dy/distance)*max; }
             joyStick.style.transform = `translate(${dx}px, ${dy}px)`;
-            
             moveRight = dx / max;
             moveForward = dy / max; 
         }
 
-        // --- ИДЕАЛЬНЫЙ СВОБОДНЫЙ ОБЗОР (Pointer Events) ---
+        // === 4. СВОБОДНЫЙ ОБЗОР ===
         const lookZone = document.getElementById('look-zone');
-        let lookPointerId = null; // Запоминаем ID пальца для обзора
+        let lookPointerId = null; 
         let lastTouch = { x: 0, y: 0 };
 
         lookZone.addEventListener('pointerdown', e => {
@@ -137,7 +150,6 @@
         });
 
         lookZone.addEventListener('pointermove', e => {
-            // Реагируем только если двигается палец обзора
             if (lookPointerId === e.pointerId) {
                 e.preventDefault();
                 const deltaX = e.clientX - lastTouch.x;
@@ -151,43 +163,36 @@
         });
 
         const resetLook = (e) => {
-            if (lookPointerId === e.pointerId) {
-                e.preventDefault();
-                lookPointerId = null;
-            }
+            if (lookPointerId === e.pointerId) { e.preventDefault(); lookPointerId = null; }
         };
         lookZone.addEventListener('pointerup', resetLook);
         lookZone.addEventListener('pointercancel', resetLook);
 
-        // --- КНОПКА СТРЕЛЬБЫ ---
+        // === 5. СТРЕЛЬБА ===
         const shootBtn = document.getElementById('shoot-btn');
         shootBtn.addEventListener('pointerdown', (e) => {
             e.preventDefault();
             pitch += 0.05; // Отдача
         });
 
-        // --- ГЛАВНЫЙ ИГРОВОЙ ЦИКЛ ---
+        // === 6. ГЛАВНЫЙ ЦИКЛ И АДАПТАЦИЯ ЭКРАНА ===
         const clock = new THREE.Clock();
 
         function animate() {
             requestAnimationFrame(animate);
             const delta = clock.getDelta();
 
-            // Вращение камеры
             const euler = new THREE.Euler(0, 0, 0, 'YXZ');
             euler.x = pitch;
             euler.y = yaw;
             camera.quaternion.setFromEuler(euler);
 
-            // Движение
             const speed = 7 * delta;
-            
             const direction = new THREE.Vector3();
             camera.getWorldDirection(direction);
             direction.y = 0; 
             direction.normalize();
 
-            // ИСПРАВЛЕНА МАТЕМАТИКА: Теперь Право - это Право!
             const rightVector = new THREE.Vector3();
             rightVector.crossVectors(direction, camera.up).normalize();
 
@@ -199,6 +204,7 @@
 
         animate();
 
+        // При повороте телефона пересчитываем размер экрана!
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
