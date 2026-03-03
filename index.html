@@ -2,7 +2,6 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <!-- КРИТИЧЕСКИ ВАЖНО: Отключаем зум, масштабирование и подгоняем под челки айфонов -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Telegram DOOM PRO</title>
     
@@ -11,46 +10,138 @@
     <script src="js-dos.js"></script>
     
     <style>
-        /* БРОНЯ ОТ СВАЙПОВ: Убиваем все системные скроллы и жесты браузера */
+        /* БАЗА И ЗАЩИТА ОТ СВАЙПОВ */
         html, body {
             width: 100%; height: 100%; margin: 0; padding: 0;
-            background-color: #000;
-            overflow: hidden;
-            touch-action: none; /* Жестко блокируем жесты (зум, двойные тапы) */
-            overscroll-behavior: none; /* Отключаем pull-to-refresh (обновление свайпом вниз) */
-            -webkit-user-select: none; /* Отключаем выделение текста */
-            user-select: none;
+            background-color: #000; overflow: hidden;
+            touch-action: none; overscroll-behavior: none;
+            user-select: none; -webkit-user-select: none;
         }
-        
+
         #jsdos {
-            width: 100%; height: 100%;
+            width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1;
         }
+
+        /* УЛУЧШЕНИЕ ВИЗУАЛА: Делаем пиксели резкими (убираем мыло) */
+        canvas {
+            image-rendering: -moz-crisp-edges;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+            image-rendering: pixelated;
+        }
+
+        /* ЭФФЕКТ СТАРОГО ТЕЛЕВИЗОРА (Сканлайны) */
+        .crt-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 2px, 3px 100%;
+            z-index: 2; pointer-events: none; /* Пропускаем клики сквозь фильтр */
+        }
+
+        /* КАСТОМНЫЙ ГЕЙМПАД */
+        #gamepad {
+            position: absolute; bottom: 20px; left: 0; width: 100%; height: 150px;
+            z-index: 10; display: flex; justify-content: space-between; padding: 0 20px;
+            box-sizing: border-box; pointer-events: none; /* Сам контейнер клики не ловит */
+        }
+
+        /* Стеклянные кнопки (Glassmorphism) */
+        .btn {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%; color: white; font-weight: bold; font-size: 18px;
+            display: flex; justify-content: center; align-items: center;
+            pointer-events: auto; /* А вот кнопки ловят нажатия */
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: background 0.1s;
+        }
+        .btn:active { background: rgba(255, 0, 0, 0.5); transform: scale(0.95); }
+
+        /* Левый блок (Крестовина) */
+        .d-pad {
+            display: grid; grid-template-columns: 60px 60px 60px; grid-template-rows: 60px 60px 60px;
+            gap: 5px;
+        }
+        .btn-up { grid-column: 2; grid-row: 1; }
+        .btn-left { grid-column: 1; grid-row: 2; }
+        .btn-down { grid-column: 2; grid-row: 2; }
+        .btn-right { grid-column: 3; grid-row: 2; }
+
+        /* Правый блок (Действия) */
+        .action-pad {
+            display: flex; gap: 15px; align-items: flex-end; padding-bottom: 20px;
+        }
+        .btn-action { width: 70px; height: 70px; border-radius: 50%; font-size: 24px; }
+        
+        /* Скрываем стандартные элементы JS-DOS, если они вылезут */
+        .emulator-ui, .emulator-options { display: none !important; }
     </style>
 </head>
 <body>
+    <!-- 1. Сама игра -->
     <div id="jsdos"></div>
+    <!-- 2. Эффект старого телевизора -->
+    <div class="crt-overlay"></div>
     
+    <!-- 3. Наш красивый геймпад -->
+    <div id="gamepad">
+        <div class="d-pad">
+            <div class="btn btn-up" data-key="38">W</div>
+            <div class="btn btn-left" data-key="37">A</div>
+            <div class="btn btn-down" data-key="40">S</div>
+            <div class="btn btn-right" data-key="39">D</div>
+        </div>
+        <div class="action-pad">
+            <div class="btn btn-action" data-key="32">🚪</div> <!-- Пробел: Открыть/Использовать -->
+            <div class="btn btn-action" data-key="17" style="background: rgba(255, 50, 50, 0.3);">🔫</div> <!-- Ctrl: Стрелять -->
+        </div>
+    </div>
+
     <script>
         const tg = window.Telegram.WebApp;
-        
-        // 1. Растягиваем интерфейс
         tg.expand();
-        
-        // 2. САМОЕ ГЛАВНОЕ: Отключаем закрытие свайпом вниз!
-        if (tg.isVersionAtLeast("6.9")) {
-            tg.disableVerticalSwipes();
-        }
-        
-        // 3. Включаем подтверждение при выходе (если юзер случайно нажал крестик, бот спросит "Точно выйти?")
+        if (tg.isVersionAtLeast("6.9")) tg.disableVerticalSwipes();
         tg.enableClosingConfirmation();
 
-        // 4. Запрашиваем настоящий Fullscreen (работает в самых новых версиях Telegram)
-        if (tg.requestFullscreen) {
-            tg.requestFullscreen();
+        // Указываем путь к нашим локальным файлам
+        emulators.pathPrefix = "./";
+        
+        // Запускаем игру
+        Dos(document.getElementById("jsdos")).run("doom.jsdos");
+
+        // --- ЛОГИКА ГЕЙМПАДА ---
+        // Функция симуляции нажатия клавиши для эмулятора
+        function triggerKey(keyCode, isDown) {
+            const eventType = isDown ? 'keydown' : 'keyup';
+            const e = new Event(eventType, { bubbles: true });
+            e.keyCode = parseInt(keyCode);
+            e.which = parseInt(keyCode);
+            document.dispatchEvent(e);
+            
+            // Дублируем событие прямо в canvas для надежности
+            const canvas = document.querySelector('canvas');
+            if (canvas) canvas.dispatchEvent(new Event(eventType, { bubbles: true, keyCode: parseInt(keyCode) }));
         }
 
-        emulators.pathPrefix = "./";
-        Dos(document.getElementById("jsdos")).run("doom.jsdos");
+        // Подключаем сенсорные нажатия ко всем нашим стеклянным кнопкам
+        document.querySelectorAll('.btn').forEach(button => {
+            const key = button.getAttribute('data-key');
+            
+            // Когда палец коснулся кнопки
+            button.addEventListener('touchstart', (e) => {
+                e.preventDefault(); // Запрещаем браузеру выделять текст
+                triggerKey(key, true); // Кнопка "нажата"
+                button.style.background = 'rgba(255, 255, 255, 0.5)';
+            }, { passive: false });
+
+            // Когда палец отпустил кнопку
+            button.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                triggerKey(key, false); // Кнопка "отпущена"
+                button.style.background = '';
+            }, { passive: false });
+        });
     </script>
 </body>
 </html>
