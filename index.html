@@ -74,29 +74,30 @@
     </div>
 
     <script>
-        // === МАГИЯ АУДИО (Синтезатор звуков 90-х) ===
+        // === МАГИЯ АУДИО ===
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         const audioCtx = new AudioContext();
 
         const SFX = {
             playNoise: (duration, freq) => {
                 if (audioCtx.state === 'suspended') audioCtx.resume();
-                const bufferSize = audioCtx.sampleRate * duration;
-                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-                const data = buffer.getChannelData(0);
-                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-                
+                const bufferSize = audioCtx.sampleRate * duration; const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
                 const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
                 const filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = freq;
                 const gain = audioCtx.createGain(); gain.gain.setValueAtTime(1, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
-                
-                noise.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
-                noise.start();
+                noise.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination); noise.start();
             },
-            shootPistol: () => SFX.playNoise(0.15, 2000), // Звонкий хлопок
-            shootShotgun: () => SFX.playNoise(0.3, 500),  // Басовый мощный взрыв
-            shootAuto: () => SFX.playNoise(0.1, 3000),    // Короткий треск
-            
+            shootPistol: () => SFX.playNoise(0.15, 2000), 
+            shootShotgun: () => SFX.playNoise(0.3, 500),  
+            shootAuto: () => SFX.playNoise(0.1, 3000),    
+            emptyClick: () => {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.type = 'square'; osc.frequency.setValueAtTime(2000, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.5, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
+                osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.05);
+            },
             reload: () => {
                 if (audioCtx.state === 'suspended') audioCtx.resume();
                 const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
@@ -104,7 +105,6 @@
                 gain.gain.setValueAtTime(0.5, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
                 osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.2);
             },
-            
             enemyHit: () => {
                 if (audioCtx.state === 'suspended') audioCtx.resume();
                 const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
@@ -112,22 +112,27 @@
                 gain.gain.setValueAtTime(0.5, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
                 osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.2);
             },
-            
             playerHurt: () => {
-                SFX.playNoise(0.2, 300); // Глухой удар
+                SFX.playNoise(0.2, 300); 
                 if (audioCtx.state === 'suspended') audioCtx.resume();
                 const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
                 osc.type = 'square'; osc.frequency.setValueAtTime(150, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.2);
                 gain.gain.setValueAtTime(1, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
                 osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+            },
+            pickup: () => {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.type = 'sine'; osc.frequency.setValueAtTime(800, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.5, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
+                osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.2);
             }
         };
 
-        // ТЕЛЕГРАМ АПИ (Плюс включение звука при первом тапе)
         const tg = window.Telegram.WebApp;
         document.body.addEventListener('pointerdown', () => { 
             if (tg.requestFullscreen && !tg.isFullscreen) tg.requestFullscreen(); 
-            if (audioCtx.state === 'suspended') audioCtx.resume(); // Браузеры требуют клика для включения звука!
+            if (audioCtx.state === 'suspended') audioCtx.resume(); 
         }, { once: true });
         if (tg.setHeaderColor) { tg.setHeaderColor('#000000'); tg.setBackgroundColor('#000000'); }
         tg.expand(); if (tg.isVersionAtLeast("6.9")) tg.disableVerticalSwipes(); tg.enableClosingConfirmation();
@@ -152,6 +157,12 @@
                 ctx.fillStyle = '#000000'; ctx.fillRect(20,40,24,12); 
                 ctx.fillStyle = '#ffffff'; ctx.fillRect(22,40,4,6); ctx.fillRect(38,40,4,6); 
                 ctx.fillStyle = '#555555'; ctx.fillRect(0,0,64,8); 
+            } else if (type === 'medkit') {
+                ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,64,64); 
+                ctx.fillStyle = '#00cc00'; ctx.fillRect(24,8,16,48); ctx.fillRect(8,24,48,16); // Зеленый крест
+            } else if (type === 'ammo_box') {
+                ctx.fillStyle = '#4a5d23'; ctx.fillRect(0,0,64,64); // Хаки
+                ctx.fillStyle = '#ffd700'; ctx.fillRect(16,16,8,32); ctx.fillRect(32,16,8,32); ctx.fillRect(48,16,8,32); // Пули
             }
             const tex = new THREE.CanvasTexture(canvas); tex.magFilter = THREE.NearestFilter; return tex;
         }
@@ -159,6 +170,8 @@
         const texFloor = createTexture('floor'); texFloor.wrapS = THREE.RepeatWrapping; texFloor.wrapT = THREE.RepeatWrapping; texFloor.repeat.set(20, 20);
         const texWall = createTexture('wall'); texWall.wrapS = THREE.RepeatWrapping; texWall.wrapT = THREE.RepeatWrapping;
         const texEnemy = createTexture('enemy');
+        const texMedkit = createTexture('medkit');
+        const texAmmo = createTexture('ammo_box');
 
         // === ИГРОВОЕ СОСТОЯНИЕ ===
         let playerHealth = 100; let isGameOver = false; let kills = 0;
@@ -170,7 +183,7 @@
             if (isGameOver) return; playerHealth -= amount; if (playerHealth < 0) playerHealth = 0;
             healthBar.style.width = playerHealth + '%';
             damageOverlay.style.opacity = 1; setTimeout(() => { damageOverlay.style.opacity = 0; }, 150);
-            SFX.playerHurt(); // ЗВУК УРОНА
+            SFX.playerHurt(); 
 
             if (playerHealth === 0) {
                 isGameOver = true; finalScore.innerText = kills; gameOverScreen.style.opacity = 1; gameOverScreen.style.pointerEvents = 'auto';
@@ -178,41 +191,64 @@
             }
         }
 
+        function heal(amount) {
+            if (isGameOver) return; playerHealth += amount; if (playerHealth > 100) playerHealth = 100;
+            healthBar.style.width = playerHealth + '%';
+        }
+
         document.getElementById('restart-btn').addEventListener('pointerdown', (e) => {
             e.preventDefault(); playerHealth = 100; healthBar.style.width = '100%'; kills = 0; killCounter.innerText = `УБИТО: 0`;
+            
+            // Сбрасываем резерв патронов
+            weapons[0].reserve = 48; weapons[1].reserve = 18; weapons[2].reserve = 90;
             ammo = weapons[currentWeaponIdx].maxAmmo; isReloading = false; updateHUD();
+            
             gameOverScreen.style.opacity = 0; gameOverScreen.style.pointerEvents = 'none';
             camera.position.set(0, playerHeight, 0); yaw = 0; pitch = 0;
             enemies.forEach(e => scene.remove(e)); enemies.length = 0;
             for(let i = 0; i < 10; i++) spawnEnemy();
+            
+            lootItems.forEach(item => scene.remove(item)); lootItems.length = 0; lastLootSpawn = Date.now();
+            
             isGameOver = false;
         });
 
-        // === ОРУЖИЕ ===
+        // === ОРУЖИЕ И ПАТРОНЫ (РЮКЗАК) ===
         const weapons =[
-            { name: "ПИСТОЛЕТ", damage: 35, maxAmmo: 12, recoil: 0.05, reloadTime: 1000, fireRate: 300, color: 0x888888, size:[0.08, 0.1, 0.3], sound: SFX.shootPistol },
-            { name: "ДРОБОВИК", damage: 100, maxAmmo: 6, recoil: 0.15, reloadTime: 2000, fireRate: 800, color: 0x333333, size:[0.15, 0.1, 0.5], sound: SFX.shootShotgun },
-            { name: "АВТОМАТ", damage: 20, maxAmmo: 30, recoil: 0.02, reloadTime: 1500, fireRate: 100, color: 0x2e4a2e, size:[0.1, 0.12, 0.45], sound: SFX.shootAuto }
+            { name: "ПИСТОЛЕТ", damage: 35, maxAmmo: 12, reserve: 48, recoil: 0.05, reloadTime: 1000, fireRate: 300, color: 0x888888, size:[0.08, 0.1, 0.3], sound: SFX.shootPistol },
+            { name: "ДРОБОВИК", damage: 100, maxAmmo: 6, reserve: 18, recoil: 0.15, reloadTime: 2000, fireRate: 800, color: 0x333333, size:[0.15, 0.1, 0.5], sound: SFX.shootShotgun },
+            { name: "АВТОМАТ", damage: 20, maxAmmo: 30, reserve: 90, recoil: 0.02, reloadTime: 1500, fireRate: 100, color: 0x2e4a2e, size:[0.1, 0.12, 0.45], sound: SFX.shootAuto }
         ];
         let currentWeaponIdx = 0; let ammo = weapons[0].maxAmmo; let isReloading = false; let lastFireTime = 0;
         const ammoDisplay = document.getElementById('ammo-display');
 
         function updateHUD() {
             if (isReloading) { ammoDisplay.innerText = `ПЕРЕЗАРЯДКА...`; ammoDisplay.style.color = "#ffaa00"; } 
-            else { const w = weapons[currentWeaponIdx]; ammoDisplay.innerText = `${w.name}: ${ammo} / ${w.maxAmmo}`; ammoDisplay.style.color = ammo === 0 ? "#ff5555" : "#ffffff"; }
+            else { const w = weapons[currentWeaponIdx]; ammoDisplay.innerText = `${w.name}: ${ammo} | ${w.reserve}`; ammoDisplay.style.color = ammo === 0 ? "#ff5555" : "#ffffff"; }
         }
         updateHUD();
 
         document.getElementById('weapon-btn').addEventListener('pointerdown', (e) => {
             e.preventDefault(); if (isReloading || isGameOver) return; 
             currentWeaponIdx = (currentWeaponIdx + 1) % weapons.length;
-            ammo = weapons[currentWeaponIdx].maxAmmo; updateHUD(); buildWeaponModel(); SFX.reload();
+            // При смене пушки мы просто смотрим, сколько в ней осталось
+            ammo = weapons[currentWeaponIdx].maxAmmo; // Для простоты пока даем полный магазин при смене
+            updateHUD(); buildWeaponModel(); SFX.reload();
         });
 
         document.getElementById('reload-btn').addEventListener('pointerdown', (e) => {
-            e.preventDefault(); if (isReloading || ammo === weapons[currentWeaponIdx].maxAmmo || isGameOver) return;
-            isReloading = true; updateHUD(); weaponBasePos.y = -0.5; SFX.reload(); // ЗВУК ПЕРЕЗАРЯДКИ
-            setTimeout(() => { ammo = weapons[currentWeaponIdx].maxAmmo; isReloading = false; updateHUD(); weaponBasePos.y = -0.25; }, weapons[currentWeaponIdx].reloadTime);
+            e.preventDefault(); 
+            const w = weapons[currentWeaponIdx];
+            if (isReloading || ammo === w.maxAmmo || w.reserve <= 0 || isGameOver) return;
+            
+            let needed = w.maxAmmo - ammo;
+            if (needed > w.reserve) needed = w.reserve; // Если в запасе меньше, чем нужно для полного
+            
+            isReloading = true; updateHUD(); weaponBasePos.y = -0.5; SFX.reload(); 
+            setTimeout(() => { 
+                ammo += needed; w.reserve -= needed;
+                isReloading = false; updateHUD(); weaponBasePos.y = -0.25; 
+            }, w.reloadTime);
         });
 
         // === 3D ДВИЖОК И АРЕНА ===
@@ -260,6 +296,7 @@
             pillar.position.set(px, 4, pz); scene.add(pillar);
         }
 
+        // === ВРАГИ ===
         const enemies =[]; const enemyGeo = new THREE.BoxGeometry(1.6, 2.4, 1.6);
         function spawnEnemy() {
             const enemyMat = new THREE.MeshLambertMaterial({ map: texEnemy });
@@ -270,6 +307,25 @@
             scene.add(enemy); enemies.push(enemy);
         }
         for(let i = 0; i < 10; i++) spawnEnemy();
+
+        // === СПАВН ЛУТА (Аптечки и Патроны) ===
+        const lootItems =[];
+        let lastLootSpawn = Date.now();
+        
+        function spawnLoot() {
+            if (lootItems.length > 6) return; // Максимум 6 коробок на карте
+            const isMedkit = Math.random() > 0.5;
+            const geo = new THREE.BoxGeometry(1, 1, 1);
+            const mat = new THREE.MeshLambertMaterial({ map: isMedkit ? texMedkit : texAmmo });
+            const item = new THREE.Mesh(geo, mat);
+            item.type = isMedkit ? 'medkit' : 'ammo';
+            
+            let lx = (Math.random() - 0.5) * (arenaSize - 10);
+            let lz = (Math.random() - 0.5) * (arenaSize - 10);
+            item.position.set(lx, 0.6, lz);
+            scene.add(item);
+            lootItems.push(item);
+        }
 
         const raycaster = new THREE.Raycaster(); const screenCenter = new THREE.Vector2(0, 0);
         let moveForward = 0; let moveRight = 0; let yaw = 0; let pitch = 0; 
@@ -292,16 +348,21 @@
         document.getElementById('jump-btn').addEventListener('pointerdown', e => { e.preventDefault(); if(isGrounded && !isGameOver){velocityY=jumpStrength; isGrounded=false;} });
 
         document.getElementById('shoot-btn').addEventListener('pointerdown', (e) => {
-            e.preventDefault(); if (isGameOver) return;
+            e.preventDefault(); if (isGameOver || isReloading) return;
             const now = Date.now(); const w = weapons[currentWeaponIdx];
-            if (isReloading || ammo <= 0) return; 
+            
+            // Если нет патронов в магазине
+            if (ammo <= 0) {
+                if (now - lastFireTime > 300) { SFX.emptyClick(); lastFireTime = now; }
+                return; 
+            }
             if (now - lastFireTime < w.fireRate) return; 
             
             ammo--; lastFireTime = now; updateHUD();
             pitch += w.recoil; yaw += (Math.random() - 0.5) * w.recoil * 0.5;
             weaponGroup.position.z += 0.15; weaponGroup.rotation.x += 0.2; muzzleFlash.intensity = 2;
 
-            w.sound(); // ВОСПРОИЗВЕДЕНИЕ ЗВУКА ВЫСТРЕЛА
+            w.sound(); 
 
             raycaster.setFromCamera(screenCenter, camera);
             const intersects = raycaster.intersectObjects(enemies);
@@ -310,8 +371,7 @@
                 hitEnemy.health -= w.damage;
                 hitEnemy.material.color.setHex(0xffffff);
                 setTimeout(() => { if(hitEnemy.parent) hitEnemy.material.color.setHex(0xffffff); }, 100);
-
-                SFX.enemyHit(); // ЗВУК ПОПАДАНИЯ ВО ВРАГА
+                SFX.enemyHit();
 
                 if (hitEnemy.health <= 0) {
                     scene.remove(hitEnemy); enemies.splice(enemies.indexOf(hitEnemy), 1);
@@ -326,12 +386,39 @@
         function animate() {
             requestAnimationFrame(animate);
             const delta = Math.min(clock.getDelta(), 0.1);
+            const now = Date.now();
 
             weaponGroup.position.lerp(weaponBasePos, 0.15); weaponGroup.rotation.x = THREE.MathUtils.lerp(weaponGroup.rotation.x, 0, 0.15);
             if (muzzleFlash.intensity > 0) muzzleFlash.intensity -= delta * 15; 
 
             if (!isGameOver) {
-                const now = Date.now();
+                // СПАВН ЛУТА (Каждые 5 секунд)
+                if (now - lastLootSpawn > 5000) { spawnLoot(); lastLootSpawn = now; }
+
+                // ЛОГИКА ЛУТА (Подбор аптечек и патронов)
+                for (let i = lootItems.length - 1; i >= 0; i--) {
+                    const item = lootItems[i];
+                    item.rotation.y += 2 * delta; // Коробки крутятся в воздухе
+                    item.rotation.x += 1 * delta;
+                    
+                    // Если игрок подошел близко (Дистанция < 1.5 метра)
+                    if (camera.position.distanceTo(item.position) < 1.5) {
+                        SFX.pickup(); // Звук подбора
+                        
+                        if (item.type === 'medkit') {
+                            heal(40); // Лечим на 40 ХП
+                        } else {
+                            // Даем патроны для текущего оружия (2 полных магазина в резерв)
+                            weapons[currentWeaponIdx].reserve += weapons[currentWeaponIdx].maxAmmo * 2;
+                            updateHUD();
+                        }
+                        
+                        scene.remove(item);
+                        lootItems.splice(i, 1);
+                    }
+                }
+
+                // ЛОГИКА ВРАГОВ
                 enemies.forEach(enemy => {
                     enemy.lookAt(camera.position.x, enemy.position.y, camera.position.z);
                     const dist = camera.position.distanceTo(enemy.position);
@@ -347,6 +434,7 @@
                     }
                 });
 
+                // ФИЗИКА ДВИЖЕНИЯ
                 velocityY += gravity * delta; camera.position.y += velocityY * delta;
                 if (camera.position.y <= playerHeight) { camera.position.y = playerHeight; velocityY = 0; isGrounded = true; }
 
