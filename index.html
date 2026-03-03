@@ -5,203 +5,200 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Telegram 3D Shooter</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <!-- Подключаем настоящий 3D-движок -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
-        /* Убиваем все свайпы Телеграма навсегда */
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; touch-action: none; user-select: none; -webkit-user-select: none; }
         #game-canvas { width: 100%; height: 100%; display: block; }
         
-        /* Слой интерфейса поверх 3D графики */
         #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
         
-        /* Прицел */
-        .crosshair { position: absolute; top: 50%; left: 50%; width: 6px; height: 6px; background: #0f0; transform: translate(-50%, -50%); border-radius: 50%; box-shadow: 0 0 5px #0f0;}
+        /* ЗОНА ОБЗОРА: Занимает весь экран, но находится ПОД кнопками */
+        #look-zone { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; z-index: 1; }
         
-        /* ЛЕВЫЙ ДЖОЙСТИК (Ходьба) */
-        #joy-left { position: absolute; bottom: 30px; left: 30px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2); border-radius: 50%; pointer-events: auto; backdrop-filter: blur(2px); }
-        #joy-stick { position: absolute; top: 30px; left: 30px; width: 60px; height: 60px; background: rgba(255,255,255,0.6); border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        .crosshair { position: absolute; top: 50%; left: 50%; width: 6px; height: 6px; background: #0f0; transform: translate(-50%, -50%); border-radius: 50%; box-shadow: 0 0 5px #0f0; z-index: 2; pointer-events: none; }
         
-        /* ПРАВАЯ ЗОНА (Обзор камерой) */
-        #look-zone { position: absolute; top: 0; right: 0; width: 50%; height: 100%; pointer-events: auto; }
+        #joy-left { position: absolute; bottom: 30px; left: 30px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2); border-radius: 50%; pointer-events: auto; backdrop-filter: blur(2px); z-index: 10; }
+        #joy-stick { position: absolute; top: 30px; left: 30px; width: 60px; height: 60px; background: rgba(255,255,255,0.6); border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.5); pointer-events: none; }
         
-        /* КНОПКА ОГНЯ */
-        #shoot-btn { position: absolute; bottom: 40px; right: 40px; width: 80px; height: 80px; background: rgba(255,50,50,0.4); border-radius: 50%; pointer-events: auto; color: white; line-height: 80px; text-align: center; font-weight: bold; font-family: sans-serif; font-size: 18px; border: 2px solid rgba(255,50,50,0.8); backdrop-filter: blur(2px); }
+        #shoot-btn { position: absolute; bottom: 40px; right: 40px; width: 80px; height: 80px; background: rgba(255,50,50,0.4); border-radius: 50%; pointer-events: auto; color: white; line-height: 80px; text-align: center; font-weight: bold; font-family: sans-serif; font-size: 18px; border: 2px solid rgba(255,50,50,0.8); backdrop-filter: blur(2px); z-index: 10; }
         #shoot-btn:active { background: rgba(255,50,50,0.8); transform: scale(0.9); }
     </style>
 </head>
 <body>
-    <!-- Здесь рисуется 3D мир -->
     <canvas id="game-canvas"></canvas>
     
-    <!-- Интерфейс управления -->
     <div id="ui-layer">
+        <!-- Невидимая зона на весь экран для поворота камеры -->
+        <div id="look-zone"></div>
         <div class="crosshair"></div>
         <div id="joy-left"><div id="joy-stick"></div></div>
-        <div id="look-zone"></div>
         <div id="shoot-btn">FIRE</div>
     </div>
 
     <script>
-        // 1. Настройка Telegram (На весь экран, без закрытий)
         const tg = window.Telegram.WebApp;
         tg.expand();
         if (tg.isVersionAtLeast("6.9")) tg.disableVerticalSwipes();
         tg.enableClosingConfirmation();
 
-        // 2. Создаем 3D-сцену, камеру и рендерер
+        // --- 3D ДВИЖОК ---
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x202020); // Темное небо
-        scene.fog = new THREE.Fog(0x202020, 0, 40); // Туман вдалеке
+        scene.background = new THREE.Color(0x1a1a1a);
+        scene.fog = new THREE.Fog(0x1a1a1a, 0, 40);
 
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.y = 1.6; // Высота глаз игрока
+        camera.position.y = 1.6;
 
         const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('game-canvas'), antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
 
-        // Свет
         const light = new THREE.HemisphereLight(0xffffff, 0x444444);
         light.position.set(0, 20, 0);
         scene.add(light);
 
-        // Земля (Пол)
         const floorGeo = new THREE.PlaneGeometry(100, 100);
         const floorMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
         const floor = new THREE.Mesh(floorGeo, floorMat);
         floor.rotation.x = -Math.PI / 2;
         scene.add(floor);
 
-        // Расставляем случайные колонны/стены (Наши будущие враги или лабиринт)
         const boxGeo = new THREE.BoxGeometry(2, 3, 2);
         for(let i = 0; i < 40; i++) {
-            // Случайный цвет для каждого куба
             const boxMat = new THREE.MeshLambertMaterial({ color: Math.random() * 0xffffff });
             const box = new THREE.Mesh(boxGeo, boxMat);
             box.position.set((Math.random() - 0.5) * 40, 1.5, (Math.random() - 0.5) * 40);
             scene.add(box);
         }
 
-        // Переменные для физики и управления
         let moveForward = 0;
         let moveRight = 0;
-        let yaw = 0; // Поворот влево/вправо
-        let pitch = 0; // Взгляд вверх/вниз
+        let yaw = 0; 
+        let pitch = 0; 
 
-        // --- ЛЕВЫЙ ДЖОЙСТИК (Ходьба) ---
+        // --- ИДЕАЛЬНЫЙ ЛЕВЫЙ ДЖОЙСТИК (Pointer Events) ---
         const joyLeft = document.getElementById('joy-left');
         const joyStick = document.getElementById('joy-stick');
-        let joyActive = false;
+        let joyPointerId = null; // Запоминаем ID пальца на джойстике
         let joyCenter = { x: 0, y: 0 };
 
-        joyLeft.addEventListener('touchstart', e => {
+        joyLeft.addEventListener('pointerdown', e => {
             e.preventDefault();
-            joyActive = true;
+            joyPointerId = e.pointerId; // Захватываем конкретный палец
+            joyLeft.setPointerCapture(joyPointerId);
+            
             const rect = joyLeft.getBoundingClientRect();
             joyCenter = { x: rect.left + rect.width/2, y: rect.top + rect.height/2 };
-            handleJoyMove(e.touches[0]);
+            handleJoyMove(e);
             joyStick.style.transition = 'none';
         });
-        joyLeft.addEventListener('touchmove', e => {
-            e.preventDefault();
-            if(joyActive) handleJoyMove(e.touches[0]);
-        });
-        const resetJoy = (e) => {
-            e.preventDefault();
-            joyActive = false;
-            joyStick.style.transition = 'transform 0.1s';
-            joyStick.style.transform = `translate(0px, 0px)`;
-            moveForward = 0; moveRight = 0;
-        };
-        joyLeft.addEventListener('touchend', resetJoy);
-        joyLeft.addEventListener('touchcancel', resetJoy);
 
-        function handleJoyMove(touch) {
-            let dx = touch.clientX - joyCenter.x;
-            let dy = touch.clientY - joyCenter.y;
+        joyLeft.addEventListener('pointermove', e => {
+            // Реагируем только если двигается тот самый палец джойстика
+            if (joyPointerId === e.pointerId) {
+                e.preventDefault();
+                handleJoyMove(e);
+            }
+        });
+
+        const resetJoy = (e) => {
+            if (joyPointerId === e.pointerId) {
+                e.preventDefault();
+                joyPointerId = null;
+                joyStick.style.transition = 'transform 0.1s';
+                joyStick.style.transform = `translate(0px, 0px)`;
+                moveForward = 0; moveRight = 0;
+            }
+        };
+        joyLeft.addEventListener('pointerup', resetJoy);
+        joyLeft.addEventListener('pointercancel', resetJoy);
+
+        function handleJoyMove(event) {
+            let dx = event.clientX - joyCenter.x;
+            let dy = event.clientY - joyCenter.y;
             const distance = Math.sqrt(dx*dx + dy*dy);
-            const max = 30; // Граница стика
+            const max = 30; 
             if (distance > max) { dx = (dx/distance)*max; dy = (dy/distance)*max; }
             joyStick.style.transform = `translate(${dx}px, ${dy}px)`;
             
-            // Конвертируем положение стика в скорость (-1 до 1)
             moveRight = dx / max;
-            moveForward = dy / max; // Отрицательный dy = идем вперед
+            moveForward = dy / max; 
         }
 
-        // --- ПРАВАЯ ЗОНА ЭКРАНА (Свободный обзор камеры) ---
+        // --- ИДЕАЛЬНЫЙ СВОБОДНЫЙ ОБЗОР (Pointer Events) ---
         const lookZone = document.getElementById('look-zone');
-        let lookActive = false;
+        let lookPointerId = null; // Запоминаем ID пальца для обзора
         let lastTouch = { x: 0, y: 0 };
 
-        lookZone.addEventListener('touchstart', e => {
+        lookZone.addEventListener('pointerdown', e => {
             e.preventDefault();
-            lookActive = true;
-            lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            lookPointerId = e.pointerId;
+            lookZone.setPointerCapture(lookPointerId);
+            lastTouch = { x: e.clientX, y: e.clientY };
         });
-        lookZone.addEventListener('touchmove', e => {
-            e.preventDefault();
-            if (!lookActive) return;
-            const touch = e.touches[0];
-            const deltaX = touch.clientX - lastTouch.x;
-            const deltaY = touch.clientY - lastTouch.y;
-            lastTouch = { x: touch.clientX, y: touch.clientY };
 
-            yaw -= deltaX * 0.005;   // Чувствительность по горизонтали
-            pitch -= deltaY * 0.005; // Чувствительность по вертикали
-            
-            // Ограничиваем взгляд вверх/вниз, чтобы не сломать шею (не больше 90 градусов)
-            pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, pitch));
+        lookZone.addEventListener('pointermove', e => {
+            // Реагируем только если двигается палец обзора
+            if (lookPointerId === e.pointerId) {
+                e.preventDefault();
+                const deltaX = e.clientX - lastTouch.x;
+                const deltaY = e.clientY - lastTouch.y;
+                lastTouch = { x: e.clientX, y: e.clientY };
+
+                yaw -= deltaX * 0.005;   
+                pitch -= deltaY * 0.005; 
+                pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, pitch));
+            }
         });
-        lookZone.addEventListener('touchend', () => lookActive = false);
-        lookZone.addEventListener('touchcancel', () => lookActive = false);
+
+        const resetLook = (e) => {
+            if (lookPointerId === e.pointerId) {
+                e.preventDefault();
+                lookPointerId = null;
+            }
+        };
+        lookZone.addEventListener('pointerup', resetLook);
+        lookZone.addEventListener('pointercancel', resetLook);
 
         // --- КНОПКА СТРЕЛЬБЫ ---
         const shootBtn = document.getElementById('shoot-btn');
-        shootBtn.addEventListener('touchstart', (e) => {
+        shootBtn.addEventListener('pointerdown', (e) => {
             e.preventDefault();
-            // Эффект отдачи оружия (камера дергается вверх)
-            pitch += 0.05; 
-            // Позже здесь мы добавим вылет пули и проверку попадания (Raycaster)
+            pitch += 0.05; // Отдача
         });
 
-        // --- ГЛАВНЫЙ ИГРОВОЙ ЦИКЛ (60 Кадров в секунду) ---
+        // --- ГЛАВНЫЙ ИГРОВОЙ ЦИКЛ ---
         const clock = new THREE.Clock();
 
         function animate() {
             requestAnimationFrame(animate);
             const delta = clock.getDelta();
 
-            // 1. Вращаем камеру согласно свайпам
+            // Вращение камеры
             const euler = new THREE.Euler(0, 0, 0, 'YXZ');
             euler.x = pitch;
             euler.y = yaw;
             camera.quaternion.setFromEuler(euler);
 
-            // 2. Движение персонажа
-            const speed = 7 * delta; // Скорость бега
+            // Движение
+            const speed = 7 * delta;
             
-            // Узнаем, куда смотрит камера
             const direction = new THREE.Vector3();
             camera.getWorldDirection(direction);
-            direction.y = 0; // Чтобы мы не летали, а ходили по полу
+            direction.y = 0; 
             direction.normalize();
 
-            // Вектор шага вбок (Стрейф)
+            // ИСПРАВЛЕНА МАТЕМАТИКА: Теперь Право - это Право!
             const rightVector = new THREE.Vector3();
-            rightVector.crossVectors(camera.up, direction).normalize();
+            rightVector.crossVectors(direction, camera.up).normalize();
 
-            // Применяем физику движения
             camera.position.addScaledVector(direction, -moveForward * speed);
             camera.position.addScaledVector(rightVector, moveRight * speed);
 
-            // 3. Рендерим кадр
             renderer.render(scene, camera);
         }
 
         animate();
 
-        // Адаптация под поворот телефона
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
