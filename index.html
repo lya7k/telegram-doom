@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Telegram DOOM PRO</title>
+    <title>Telegram DOOM MOBILE</title>
     
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link rel="stylesheet" href="js-dos.css">
     <script src="js-dos.js"></script>
     
     <style>
-        /* БАЗА И ЗАЩИТА ОТ СВАЙПОВ */
+        /* БАЗА: Убиваем все свайпы и выделения */
         html, body {
             width: 100%; height: 100%; margin: 0; padding: 0;
             background-color: #000; overflow: hidden;
@@ -18,130 +18,202 @@
             user-select: none; -webkit-user-select: none;
         }
 
+        /* КОНТЕЙНЕР ИГРЫ */
         #jsdos {
             width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1;
         }
 
-        /* УЛУЧШЕНИЕ ВИЗУАЛА: Делаем пиксели резкими (убираем мыло) */
+        /* ИГРА НА ВЕСЬ ЭКРАН (Убираем рамки, растягиваем картинку) */
         canvas {
-            image-rendering: -moz-crisp-edges;
-            image-rendering: -webkit-optimize-contrast;
-            image-rendering: crisp-edges;
+            width: 100vw !important;
+            height: 100vh !important;
+            object-fit: cover !important; /* Растягивает игру на весь экран телефона */
             image-rendering: pixelated;
         }
 
-        /* ЭФФЕКТ СТАРОГО ТЕЛЕВИЗОРА (Сканлайны) */
-        .crt-overlay {
+        /* ЖЕСТКО СКРЫВАЕМ ВЕСЬ МУСОР ОТ ЭМУЛЯТОРА */
+        .emulator-options, .emulator-ui, .jsdos-ui, .emulator-overlay, .emulator-button { 
+            display: none !important; opacity: 0 !important; pointer-events: none !important; 
+        }
+
+        /* ЗЕЛЕНЫЙ КРЕСТИК ПРИЦЕЛА ПО ЦЕНТРУ */
+        .crosshair {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 20px; height: 20px; z-index: 50; pointer-events: none;
+        }
+        .crosshair::before, .crosshair::after {
+            content: ''; position: absolute; background: rgba(0, 255, 0, 0.8);
+        }
+        .crosshair::before { top: 9px; left: 0; width: 20px; height: 2px; } /* горизонтальная линия */
+        .crosshair::after { top: 0; left: 9px; width: 2px; height: 20px; }  /* вертикальная линия */
+
+        /* СЛОЙ УПРАВЛЕНИЯ (Поверх игры) */
+        #controls {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
-            background-size: 100% 2px, 3px 100%;
-            z-index: 2; pointer-events: none; /* Пропускаем клики сквозь фильтр */
+            z-index: 100; pointer-events: none; /* Пропускает клики на кнопки */
         }
 
-        /* КАСТОМНЫЙ ГЕЙМПАД */
-        #gamepad {
-            position: absolute; bottom: 20px; left: 0; width: 100%; height: 150px;
-            z-index: 10; display: flex; justify-content: space-between; padding: 0 20px;
-            box-sizing: border-box; pointer-events: none; /* Сам контейнер клики не ловит */
+        /* ЛЕВЫЙ ДЖОЙСТИК */
+        #joystick-area {
+            position: absolute; bottom: 30px; left: 20px;
+            width: 130px; height: 130px; border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.2);
+            pointer-events: auto; /* Джойстик ловит касания */
+            backdrop-filter: blur(2px);
+        }
+        #joystick-stick {
+            position: absolute; top: 35px; left: 35px;
+            width: 60px; height: 60px; border-radius: 50%;
+            background: rgba(255, 255, 255, 0.5);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            transition: transform 0.05s linear; /* Плавный возврат стика */
         }
 
-        /* Стеклянные кнопки (Glassmorphism) */
+        /* ПРАВЫЕ КНОПКИ (Стрельба и Действие) */
+        .action-area {
+            position: absolute; bottom: 30px; right: 20px;
+            display: flex; gap: 15px; align-items: flex-end;
+            pointer-events: auto;
+        }
         .btn {
-            background: rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%; color: white; font-weight: bold; font-size: 18px;
-            display: flex; justify-content: center; align-items: center;
-            pointer-events: auto; /* А вот кнопки ловят нажатия */
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-            transition: background 0.1s;
+            border-radius: 50%; display: flex; justify-content: center; align-items: center;
+            color: white; font-weight: 900; font-family: sans-serif; font-size: 14px;
+            backdrop-filter: blur(4px); box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+            border: 2px solid rgba(255,255,255,0.3);
+            transition: transform 0.1s, background 0.1s;
         }
-        .btn:active { background: rgba(255, 0, 0, 0.5); transform: scale(0.95); }
+        .btn-use { 
+            width: 60px; height: 60px; background: rgba(255, 255, 255, 0.2); margin-bottom: 10px;
+        }
+        .btn-shoot { 
+            width: 80px; height: 80px; background: rgba(255, 50, 50, 0.3); border-color: rgba(255, 50, 50, 0.5); 
+            font-size: 18px;
+        }
+        .btn:active { transform: scale(0.85); }
+        .btn-use:active { background: rgba(255, 255, 255, 0.4); }
+        .btn-shoot:active { background: rgba(255, 50, 50, 0.6); }
 
-        /* Левый блок (Крестовина) */
-        .d-pad {
-            display: grid; grid-template-columns: 60px 60px 60px; grid-template-rows: 60px 60px 60px;
-            gap: 5px;
-        }
-        .btn-up { grid-column: 2; grid-row: 1; }
-        .btn-left { grid-column: 1; grid-row: 2; }
-        .btn-down { grid-column: 2; grid-row: 2; }
-        .btn-right { grid-column: 3; grid-row: 2; }
-
-        /* Правый блок (Действия) */
-        .action-pad {
-            display: flex; gap: 15px; align-items: flex-end; padding-bottom: 20px;
-        }
-        .btn-action { width: 70px; height: 70px; border-radius: 50%; font-size: 24px; }
-        
-        /* Скрываем стандартные элементы JS-DOS, если они вылезут */
-        .emulator-ui, .emulator-options { display: none !important; }
     </style>
 </head>
 <body>
-    <!-- 1. Сама игра -->
     <div id="jsdos"></div>
-    <!-- 2. Эффект старого телевизора -->
-    <div class="crt-overlay"></div>
+    <div class="crosshair"></div> <!-- Прицел -->
     
-    <!-- 3. Наш красивый геймпад -->
-    <div id="gamepad">
-        <div class="d-pad">
-            <div class="btn btn-up" data-key="38">W</div>
-            <div class="btn btn-left" data-key="37">A</div>
-            <div class="btn btn-down" data-key="40">S</div>
-            <div class="btn btn-right" data-key="39">D</div>
+    <div id="controls">
+        <!-- Джойстик слева -->
+        <div id="joystick-area">
+            <div id="joystick-stick"></div>
         </div>
-        <div class="action-pad">
-            <div class="btn btn-action" data-key="32">🚪</div> <!-- Пробел: Открыть/Использовать -->
-            <div class="btn btn-action" data-key="17" style="background: rgba(255, 50, 50, 0.3);">🔫</div> <!-- Ctrl: Стрелять -->
+        
+        <!-- Кнопки справа -->
+        <div class="action-area">
+            <div class="btn btn-use" id="btn-use">USE</div>
+            <div class="btn btn-shoot" id="btn-shoot">FIRE</div>
         </div>
     </div>
 
     <script>
+        // НАСТРОЙКИ ТЕЛЕГРАМА (Растягиваем и блокируем закрытие)
         const tg = window.Telegram.WebApp;
         tg.expand();
         if (tg.isVersionAtLeast("6.9")) tg.disableVerticalSwipes();
         tg.enableClosingConfirmation();
 
-        // Указываем путь к нашим локальным файлам
+        // ЗАПУСК ИГРЫ
         emulators.pathPrefix = "./";
-        
-        // Запускаем игру
         Dos(document.getElementById("jsdos")).run("doom.jsdos");
 
-        // --- ЛОГИКА ГЕЙМПАДА ---
-        // Функция симуляции нажатия клавиши для эмулятора
+        // --- ЛОГИКА ЭМУЛЯЦИИ КЛАВИАТУРЫ ---
+        const KEYS = { UP: 38, DOWN: 40, LEFT: 37, RIGHT: 39, CTRL: 17, SPACE: 32 };
+
         function triggerKey(keyCode, isDown) {
             const eventType = isDown ? 'keydown' : 'keyup';
             const e = new Event(eventType, { bubbles: true });
-            e.keyCode = parseInt(keyCode);
-            e.which = parseInt(keyCode);
+            e.keyCode = keyCode; e.which = keyCode;
             document.dispatchEvent(e);
-            
-            // Дублируем событие прямо в canvas для надежности
             const canvas = document.querySelector('canvas');
-            if (canvas) canvas.dispatchEvent(new Event(eventType, { bubbles: true, keyCode: parseInt(keyCode) }));
+            if (canvas) canvas.dispatchEvent(new Event(eventType, { bubbles: true, keyCode: keyCode }));
         }
 
-        // Подключаем сенсорные нажатия ко всем нашим стеклянным кнопкам
-        document.querySelectorAll('.btn').forEach(button => {
-            const key = button.getAttribute('data-key');
-            
-            // Когда палец коснулся кнопки
-            button.addEventListener('touchstart', (e) => {
-                e.preventDefault(); // Запрещаем браузеру выделять текст
-                triggerKey(key, true); // Кнопка "нажата"
-                button.style.background = 'rgba(255, 255, 255, 0.5)';
-            }, { passive: false });
+        // --- ПРАВЫЕ КНОПКИ ---
+        function bindButton(id, keyCode) {
+            const btn = document.getElementById(id);
+            btn.addEventListener('touchstart', (e) => { e.preventDefault(); triggerKey(keyCode, true); });
+            btn.addEventListener('touchend', (e) => { e.preventDefault(); triggerKey(keyCode, false); });
+            btn.addEventListener('touchcancel', (e) => { e.preventDefault(); triggerKey(keyCode, false); });
+        }
+        bindButton('btn-shoot', KEYS.CTRL); // Огонь
+        bindButton('btn-use', KEYS.SPACE);  // Открыть дверь
 
-            // Когда палец отпустил кнопку
-            button.addEventListener('touchend', (e) => {
-                e.preventDefault();
-                triggerKey(key, false); // Кнопка "отпущена"
-                button.style.background = '';
-            }, { passive: false });
+        // --- ЛЕВЫЙ ДЖОЙСТИК (Математика движения) ---
+        const joyArea = document.getElementById('joystick-area');
+        const joyStick = document.getElementById('joystick-stick');
+        
+        let joyActive = false;
+        let joyCenter = { x: 0, y: 0 };
+        const maxRadius = 35; // Насколько далеко можно тянуть стик
+        
+        // Текущее состояние клавиш джойстика
+        let state = { up: false, down: false, left: false, right: false };
+
+        function updateKeys(x, y) {
+            const threshold = 15; // Мертвая зона в центре
+            
+            let newUp = y < -threshold;
+            let newDown = y > threshold;
+            let newLeft = x < -threshold;
+            let newRight = x > threshold;
+
+            // Нажимаем или отпускаем клавиши только если их состояние изменилось
+            if (newUp !== state.up) { triggerKey(KEYS.UP, newUp); state.up = newUp; }
+            if (newDown !== state.down) { triggerKey(KEYS.DOWN, newDown); state.down = newDown; }
+            if (newLeft !== state.left) { triggerKey(KEYS.LEFT, newLeft); state.left = newLeft; }
+            if (newRight !== state.right) { triggerKey(KEYS.RIGHT, newRight); state.right = newRight; }
+        }
+
+        joyArea.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            joyActive = true;
+            const rect = joyArea.getBoundingClientRect();
+            // Запоминаем центр джойстика
+            joyCenter = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+            handleJoyMove(e.touches[0]);
+            joyStick.style.transition = 'none'; // Убираем плавность пока палец на экране
         });
+
+        joyArea.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (joyActive) handleJoyMove(e.touches[0]);
+        });
+
+        const resetJoy = (e) => {
+            e.preventDefault();
+            joyActive = false;
+            joyStick.style.transition = 'transform 0.1s linear'; // Возвращаем стик плавно
+            joyStick.style.transform = `translate(0px, 0px)`;
+            updateKeys(0, 0); // Отпускаем все клавиши движения
+        };
+
+        joyArea.addEventListener('touchend', resetJoy);
+        joyArea.addEventListener('touchcancel', resetJoy);
+
+        function handleJoyMove(touch) {
+            let dx = touch.clientX - joyCenter.x;
+            let dy = touch.clientY - joyCenter.y;
+            let distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // Ограничиваем вылет стика за пределы круга
+            if (distance > maxRadius) {
+                dx = (dx / distance) * maxRadius;
+                dy = (dy / distance) * maxRadius;
+            }
+            
+            // Двигаем стик на экране
+            joyStick.style.transform = `translate(${dx}px, ${dy}px)`;
+            
+            // Передаем координаты в игру
+            updateKeys(dx, dy);
+        }
     </script>
 </body>
 </html>
