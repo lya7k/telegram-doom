@@ -4,10 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Telegram CS Shooter</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Базовый движок -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <!-- ЗАГРУЗЧИК 3D МОДЕЛЕЙ -->
+    <!-- Загрузчик 3D моделей -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <!-- Утилита для клонирования Скелетов (Исправляет баг с черными кубами!) -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/SkeletonUtils.js"></script>
+    <!-- Телеграм API -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; touch-action: none; user-select: none; -webkit-user-select: none; font-family: Tahoma, sans-serif; }
         #game-canvas { width: 100%; height: 100%; display: block; } 
@@ -56,8 +60,9 @@
 <body>
     <canvas id="game-canvas"></canvas>
 
+    <!-- ГЛАВНОЕ МЕНЮ -->
     <div id="main-menu">
-        <h1>CS: ZOMBIE</h1>
+        <h1>WEB<br>STRIKE</h1>
         <button class="menu-btn" id="btn-endless">Бесконечный режим</button>
         <button class="menu-btn disabled" id="btn-pvp">PvP Режим (Скоро)</button>
     </div>
@@ -102,9 +107,13 @@
         const playerHeight = 1.6; camera.position.y = playerHeight;
         let velocityY = 0; let isGrounded = true; const gravity = -25; const jumpStrength = 10; 
 
-        // === НОВЫЙ АУДИОДВИЖОК (ПРОФЕССИОНАЛЬНАЯ ЗАГРУЗКА .MP3) ===
+        // СВЕТ (Ярче, чтобы черные кубы не сливались с тенью)
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.9); scene.add(ambientLight);
+        const sunLight = new THREE.DirectionalLight(0xffffee, 1.0); sunLight.position.set(50, 100, 50); scene.add(sunLight);
+
+        // === АУДИОДВИЖОК ===
         const audioListener = new THREE.AudioListener();
-        camera.add(audioListener); // Звук привязан к ушам игрока
+        camera.add(audioListener);
         const audioLoader = new THREE.AudioLoader();
 
         const sounds = {
@@ -117,12 +126,11 @@
             hurt: new THREE.Audio(audioListener)
         };
 
-        // Если файла нет на Гитхабе - игра просто выведет ошибку в консоль, но не сломается!
         function loadSound(filename, soundObject) {
             audioLoader.load(filename, function(buffer) {
                 soundObject.setBuffer(buffer);
                 soundObject.setVolume(0.8);
-            }, undefined, function() { console.log("Не найден звук: " + filename); });
+            }, undefined, function() {});
         }
 
         loadSound('pistol.mp3', sounds.pistol);
@@ -146,7 +154,6 @@
         document.getElementById('btn-pvp').addEventListener('pointerdown', () => alert("PvP Режим в разработке!"));
         document.getElementById('btn-endless').addEventListener('pointerdown', () => {
             if (tg.requestFullscreen && !tg.isFullscreen) tg.requestFullscreen(); 
-            // Включаем звук в браузере при первом клике!
             if (audioListener.context.state === 'suspended') audioListener.context.resume();
             
             document.getElementById('main-menu').style.display = 'none';
@@ -181,55 +188,76 @@
             gameState = 'playing';
         });
 
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); scene.add(ambientLight);
-        const sunLight = new THREE.DirectionalLight(0xffffee, 0.8); sunLight.position.set(50, 100, 50); scene.add(sunLight);
-
-        // === ИДЕАЛЬНАЯ ЗАГРУЗКА 3D МОДЕЛЕЙ (GLTF/GLB) ===
+        // === ИДЕАЛЬНАЯ ЗАГРУЗКА И КЛОНИРОВАНИЕ 3D МОДЕЛЕЙ (GLTF/GLB) ===
         const gltfLoader = new THREE.GLTFLoader();
         let zombieModelTemplate = null;
 
-        // Зеленый цилиндр-заглушка на случай, если файла нет
+        // Если файла нет - это зеленая заглушка (цилиндр)
         const dummyGeo = new THREE.CylinderGeometry(0.5, 0.5, 1.8, 16);
         const dummyMat = new THREE.MeshLambertMaterial({ color: 0x3d5c3a }); 
 
         gltfLoader.load('zombie.glb', function(gltf) {
             let model = gltf.scene;
 
-            // МАГИЯ: Автоматически подгоняем размер ЛЮБОЙ скачанной модели под 1.8 метра!
+            // Высчитываем реальный размер модели, чтобы не было "гигантов"
             const box = new THREE.Box3().setFromObject(model);
             const size = box.getSize(new THREE.Vector3());
-            const scale = 1.8 / size.y; 
-            model.scale.set(scale, scale, scale);
+            
+            // Если размер валидный - сжимаем до 1.8 метра (рост человека)
+            if (size.y > 0.1) {
+                const scale = 1.8 / size.y; 
+                model.scale.set(scale, scale, scale);
+            }
 
             // Ставим ровно на землю
             const newBox = new THREE.Box3().setFromObject(model);
             model.position.y = -newBox.min.y;
 
+            // ВАЖНО: Улучшаем материалы, чтобы не было "черных кубов"
+            model.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    // Если материал кривой, создаем базовый, чтобы реагировал на свет
+                    if (child.material) {
+                        child.material = new THREE.MeshLambertMaterial({
+                            color: child.material.color || 0xffffff,
+                            map: child.material.map || null,
+                            skinning: child.isSkinnedMesh // Жизненно важно для анимации костей!
+                        });
+                    }
+                }
+            });
+
             zombieModelTemplate = model;
 
-            // Как только модель скачалась - удаляем у всех врагов зеленые цилиндры и ставим настоящую модель!
+            // Заменяем заглушки у уже заспавненных врагов
             enemies.forEach(enemy => {
                 const dummy = enemy.getObjectByName('dummy');
                 if (dummy) {
                     enemy.remove(dummy);
-                    enemy.add(zombieModelTemplate.clone());
+                    // ИСПОЛЬЗУЕМ SkeletonUtils ДЛЯ КЛОНИРОВАНИЯ КОСТЕЙ!
+                    const clonedModel = THREE.SkeletonUtils.clone(zombieModelTemplate);
+                    enemy.add(clonedModel);
                 }
             });
 
         }, undefined, function(error) {
-            console.log("Модель zombie.glb не найдена в папке. Используем цилиндры.");
+            console.log("Модель zombie.glb не найдена в папке. Используем манекены.");
         });
 
         const enemies =[]; 
         function spawnEnemy() {
             const enemyGroup = new THREE.Group();
-            enemyGroup.health = 100; enemyGroup.lastAttack = 0; 
+            enemyGroup.userData.isEnemy = true; // Метка для Лазера (урона)
+            enemyGroup.userData.health = 100; 
+            enemyGroup.userData.lastAttack = 0; 
 
-            if (zombieModelTemplate) {
-                // Ставим настоящую модель
-                enemyGroup.add(zombieModelTemplate.clone());
+            if (zombieModelTemplate && THREE.SkeletonUtils) {
+                // Если файл есть - клонируем кости правильно!
+                const clonedModel = THREE.SkeletonUtils.clone(zombieModelTemplate);
+                enemyGroup.add(clonedModel);
             } else {
-                // Ставим заглушку-цилиндр
+                // Если файла нет - ставим зеленый цилиндр
                 const dummy = new THREE.Mesh(dummyGeo, dummyMat);
                 dummy.name = 'dummy';
                 dummy.position.y = 0.9;
@@ -245,7 +273,7 @@
         }
         for(let i = 0; i < 15; i++) spawnEnemy();
 
-        // === ОРУЖИЕ (Отдача уменьшена, depthTest отключен) ===
+        // === ОРУЖИЕ ===
         const weapons =[
             { name: "ПИСТОЛЕТ", damage: 35, maxAmmo: 12, reserve: 48, recoil: 0.015, reloadTime: 1000, fireRate: 300, color: 0x888888, size:[0.08, 0.1, 0.3], snd: sounds.pistol },
             { name: "ДРОБОВИК", damage: 100, maxAmmo: 6, reserve: 18, recoil: 0.04, reloadTime: 2000, fireRate: 800, color: 0x333333, size:[0.15, 0.1, 0.5], snd: sounds.shotgun },
@@ -269,7 +297,6 @@
             if (currentWeaponMesh) weaponGroup.remove(currentWeaponMesh);
             const wInfo = weapons[currentWeaponIdx];
             const geo = new THREE.BoxGeometry(wInfo.size[0], wInfo.size[1], wInfo.size[2]);
-            // depthTest: false не дает пушке проваливаться в стены!
             const mat = new THREE.MeshLambertMaterial({ color: wInfo.color, depthTest: false }); 
             currentWeaponMesh = new THREE.Mesh(geo, mat); currentWeaponMesh.position.z = wInfo.size[2] / 2; 
             currentWeaponMesh.renderOrder = 999;
@@ -295,36 +322,32 @@
         const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('game-canvas'), antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
 
-        // === АРЕНА И КОЛЛИЗИИ ===
+        // === АРЕНА ===
         const arenaSize = 80;
         const floorGeo = new THREE.PlaneGeometry(arenaSize, arenaSize); 
-        const floorMat = new THREE.MeshLambertMaterial({ color: 0xd2b48c }); // Песочный цвет пола
+        const floorMat = new THREE.MeshLambertMaterial({ color: 0xd2b48c }); 
         const floor = new THREE.Mesh(floorGeo, floorMat); floor.rotation.x = -Math.PI / 2; scene.add(floor);
 
         const obstacleBoxes =[]; 
         const pillarGeo = new THREE.BoxGeometry(4, 8, 4); 
-        const pillarMat = new THREE.MeshLambertMaterial({ color: 0x888888 }); // Серые бетонные колонны
+        const pillarMat = new THREE.MeshLambertMaterial({ color: 0x888888 }); 
 
-        // Случайные 15 колонн
         for(let i=0; i<15; i++) {
             const pillar = new THREE.Mesh(pillarGeo, pillarMat);
             let px = (Math.random() - 0.5) * (arenaSize - 10);
             let pz = (Math.random() - 0.5) * (arenaSize - 10);
-            if(Math.abs(px) < 10 && Math.abs(pz) < 10) px += 15; // Центр свободен
+            if(Math.abs(px) < 10 && Math.abs(pz) < 10) px += 15; 
             pillar.position.set(px, 4, pz);
             scene.add(pillar);
             obstacleBoxes.push(new THREE.Box3().setFromObject(pillar));
         }
 
-        // Физическая коробка Игрока (Очень широкая, чтобы камера не лезла в стены)
         const playerBox = new THREE.Box3();
         const playerSize = new THREE.Vector3(1.6, 2.0, 1.6); 
 
         function checkCollision(nx, nz) {
             playerBox.setFromCenterAndSize(new THREE.Vector3(nx, 1.0, nz), playerSize);
-            for(let box of obstacleBoxes) {
-                if(playerBox.intersectsBox(box)) return true;
-            }
+            for(let box of obstacleBoxes) { if(playerBox.intersectsBox(box)) return true; }
             return false;
         }
 
@@ -361,30 +384,33 @@
             playSound(w.snd); 
 
             raycaster.setFromCamera(screenCenter, camera);
+            // Пробиваем луч сквозь все полигоны
             const intersects = raycaster.intersectObjects(enemies, true); 
             if (intersects.length > 0) {
-                // Ищем корень врага (так как 3D модель состоит из множества полигонов)
-                let hitEnemy = intersects[0].object;
-                while(hitEnemy.parent && hitEnemy.health === undefined && hitEnemy.parent.type === 'Group') {
-                    hitEnemy = hitEnemy.parent;
+                let hitObj = intersects[0].object;
+                let rootEnemy = hitObj;
+
+                // ИЩЕМ ГЛАВНЫЙ КОРЕНЬ ВРАГА (среди всех костей и групп)
+                while (rootEnemy.parent && !rootEnemy.userData.isEnemy) {
+                    rootEnemy = rootEnemy.parent;
                 }
-                
-                if (hitEnemy.health !== undefined) {
-                    hitEnemy.health -= w.damage;
+
+                if (rootEnemy.userData && rootEnemy.userData.isEnemy) {
+                    rootEnemy.userData.health -= w.damage;
                     
-                    // Красим модель в красный при попадании
-                    hitEnemy.traverse(child => {
-                        if(child.isMesh && child.material) {
-                            const old = child.material.emissive ? child.material.emissive.getHex() : 0x000000;
-                            if(child.material.emissive) child.material.emissive.setHex(0xff0000);
-                            setTimeout(() => { if(child && child.material && child.material.emissive) child.material.emissive.setHex(old); }, 100);
-                        }
-                    });
+                    // Визуальная вспышка (Красный цвет)
+                    if (hitObj.material) {
+                        const origEmissive = hitObj.material.emissive ? hitObj.material.emissive.getHex() : 0x000000;
+                        if(hitObj.material.emissive !== undefined) hitObj.material.emissive.setHex(0xff0000);
+                        setTimeout(() => {
+                            if(hitObj && hitObj.material && hitObj.material.emissive !== undefined) hitObj.material.emissive.setHex(origEmissive);
+                        }, 100);
+                    }
 
                     playSound(sounds.zombieHit);
 
-                    if (hitEnemy.health <= 0) {
-                        scene.remove(hitEnemy); enemies.splice(enemies.indexOf(hitEnemy), 1);
+                    if (rootEnemy.userData.health <= 0) {
+                        scene.remove(rootEnemy); enemies.splice(enemies.indexOf(rootEnemy), 1);
                         kills++; killCounter.innerText = `ФРАГОВ: ${kills}`; spawnEnemy();
                     }
                 }
@@ -403,17 +429,45 @@
                 weaponGroup.position.lerp(weaponBasePos, 0.15); weaponGroup.rotation.x = THREE.MathUtils.lerp(weaponGroup.rotation.x, 0, 0.15);
                 if (muzzleFlash.intensity > 0) muzzleFlash.intensity -= delta * 15; 
 
-                enemies.forEach((enemy) => {
+                // === ИИ ВРАГОВ (ИСПРАВЛЕНО: Разумное Фланжирование) ===
+                enemies.forEach((enemy, index) => {
                     enemy.lookAt(camera.position.x, enemy.position.y, camera.position.z);
                     const distToPlayer = camera.position.distanceTo(enemy.position);
 
+                    // Вектор на игрока
+                    let dir = new THREE.Vector3().subVectors(camera.position, enemy.position);
+                    dir.y = 0; dir.normalize();
+
+                    // Сила отталкивания от других зомби
+                    let sep = new THREE.Vector3();
+                    for(let j=0; j<enemies.length; j++) {
+                        if (enemy === enemies[j]) continue;
+                        let dist = enemy.position.distanceTo(enemies[j].position);
+                        if (dist < 2.0 && dist > 0) {
+                            let push = new THREE.Vector3().subVectors(enemy.position, enemies[j].position).normalize();
+                            push.divideScalar(dist); // Чем ближе, тем сильнее толкает
+                            sep.add(push);
+                        }
+                    }
+
+                    // Сила обхода с флангов
+                    let right = new THREE.Vector3(-dir.z, 0, dir.x);
+                    let flankForce = (index % 2 === 0 ? 1 : -1) * 0.5; // Половина обходит слева, половина справа
+
                     if (distToPlayer > 1.5) {
-                        let dir = new THREE.Vector3().subVectors(camera.position, enemy.position);
-                        dir.y = 0; dir.normalize();
-                        enemy.position.addScaledVector(dir, 2.5 * delta); 
+                        // Складываем все силы в одно направление
+                        let moveDir = new THREE.Vector3()
+                            .addScaledVector(dir, 1.0)        // Бежать на игрока
+                            .addScaledVector(sep, 1.5)        // Отталкиваться друг от друга
+                            .addScaledVector(right, flankForce) // Обходить сбоку
+                            .normalize();
+
+                        enemy.position.addScaledVector(moveDir, 2.5 * delta); 
                     } else {
-                        if (now - enemy.lastAttack > 1000) {
-                            takeDamage(15); enemy.lastAttack = now;
+                        if (now - enemy.userData.lastAttack > 1000) {
+                            takeDamage(15); enemy.userData.lastAttack = now;
+                            enemy.position.addScaledVector(dir, 0.5);
+                            setTimeout(() => { if(enemy.parent) enemy.position.addScaledVector(dir, -0.5); }, 100);
                         }
                     }
                 });
@@ -434,7 +488,6 @@
                 let nextX = camera.position.x - moveForward * speed * direction.x + moveRight * speed * rightVector.x;
                 let nextZ = camera.position.z - moveForward * speed * direction.z + moveRight * speed * rightVector.z;
                 
-                // Проверка столкновений
                 if (!checkCollision(nextX, camera.position.z)) camera.position.x = nextX;
                 if (!checkCollision(camera.position.x, nextZ)) camera.position.z = nextZ;
                 
