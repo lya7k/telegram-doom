@@ -103,14 +103,13 @@
         if (tg.setHeaderColor) { tg.setHeaderColor('#000000'); tg.setBackgroundColor('#000000'); }
         tg.expand(); if (tg.isVersionAtLeast("6.9")) tg.disableVerticalSwipes(); tg.enableClosingConfirmation();
 
-        // === ИНИЦИАЛИЗАЦИЯ РЕНДЕРЕРА (ТОТ САМЫЙ ПОТЕРЯННЫЙ БЛОК!) ===
+        // === ИНИЦИАЛИЗАЦИЯ РЕНДЕРЕРА ===
         const canvas = document.getElementById('game-canvas');
         const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Оптимизация под смартфоны
-        renderer.shadowMap.enabled = true; // Опционально для теней
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-        // === ГЕНЕРАТОР ТЕКСТУР (ПРОЦЕДУРНЫЙ ВИЗУАЛ) ===
+        // === ГЕНЕРАТОР ТЕКСТУР ===
         function createFloorTexture() {
             const cvs = document.createElement('canvas'); cvs.width = 512; cvs.height = 512;
             const ctx = cvs.getContext('2d');
@@ -176,7 +175,19 @@
         loadSound('reload.mp3', sounds.reload); loadSound('zombie_hit.mp3', sounds.zombieHit);
         loadSound('hurt.mp3', sounds.hurt);
 
-        function playSound(snd) { if (snd && snd.buffer) { if (snd.isPlaying) snd.stop(); snd.play(); } }
+        function playSound(snd) { 
+            if (snd && snd.buffer) { 
+                if (snd.isPlaying) snd.stop(); 
+                snd.play(); 
+            } 
+        }
+
+        // ГАРАНТИЯ ВКЛЮЧЕНИЯ ЗВУКА НА IOS/ANDROID ПРИ ПЕРВОМ КЛИКЕ
+        document.body.addEventListener('pointerdown', () => {
+            if (audioListener.context.state === 'suspended') {
+                audioListener.context.resume();
+            }
+        }, { once: true });
 
         // === СИСТЕМА БАФФОВ И ИГРОКА ===
         let gameState = 'menu'; 
@@ -205,6 +216,8 @@
             healthBar.style.width = playerHealth + '%';
             document.getElementById('damage-overlay').style.opacity = 1; 
             setTimeout(() => { document.getElementById('damage-overlay').style.opacity = 0; }, 150);
+            
+            playSound(sounds.hurt); // ВОЗВРАЩЕН ЗВУК УРОНА
 
             if (playerHealth === 0) {
                 gameState = 'gameover'; document.getElementById('final-score').innerText = kills; 
@@ -215,9 +228,9 @@
 
         // === ОРУЖИЕ ===
         const weapons =[
-            { name: "ПИСТОЛЕТ", damage: 35, maxAmmo: 12, reserve: 48, recoil: 0.015, reloadTime: 1000, fireRate: 300, color: 0x888888, file: 'pistol.glb', mesh: null },
-            { name: "ДРОБОВИК", damage: 100, maxAmmo: 6, reserve: 18, recoil: 0.04, reloadTime: 2000, fireRate: 800, color: 0x333333, file: 'shotgun.glb', mesh: null },
-            { name: "АВТОМАТ", damage: 20, maxAmmo: 30, reserve: 90, recoil: 0.008, reloadTime: 1500, fireRate: 100, color: 0x2e4a2e, file: 'auto.glb', mesh: null }
+            { name: "ПИСТОЛЕТ", damage: 35, maxAmmo: 12, reserve: 48, recoil: 0.015, reloadTime: 1000, fireRate: 300, color: 0x888888, file: 'pistol.glb', mesh: null, snd: sounds.pistol },
+            { name: "ДРОБОВИК", damage: 100, maxAmmo: 6, reserve: 18, recoil: 0.04, reloadTime: 2000, fireRate: 800, color: 0x333333, file: 'shotgun.glb', mesh: null, snd: sounds.shotgun },
+            { name: "АВТОМАТ", damage: 20, maxAmmo: 30, reserve: 90, recoil: 0.008, reloadTime: 1500, fireRate: 100, color: 0x2e4a2e, file: 'auto.glb', mesh: null, snd: sounds.auto }
         ];
         let currentWeaponIdx = 0; let ammo = weapons[0].maxAmmo; let isReloading = false; let lastFireTime = 0;
         
@@ -320,7 +333,7 @@
         for(let i = 0; i < 15; i++) spawnEnemy();
 
         // === СИСТЕМА ЛУТА (PICKUPS) ===
-        const pickups = [];
+        const pickups =[];
         const pickupTypes =['health', 'ammo', 'speed', 'invincible'];
         const pickupGeos = {
             'health': new THREE.BoxGeometry(0.6, 0.6, 0.6), 
@@ -404,6 +417,7 @@
             e.preventDefault(); if (isReloading || gameState !== 'playing') return; 
             currentWeaponIdx = (currentWeaponIdx + 1) % weapons.length;
             ammo = weapons[currentWeaponIdx].maxAmmo; updateHUD(); buildWeaponModel(); 
+            playSound(sounds.reload); // ВОЗВРАЩЕН ЗВУК ПЕРЕЗАРЯДКИ ПРИ СМЕНЕ
         });
 
         document.getElementById('reload-btn').addEventListener('pointerdown', (e) => {
@@ -411,17 +425,26 @@
             if (isReloading || ammo === w.maxAmmo || w.reserve <= 0 || gameState !== 'playing') return;
             let needed = w.maxAmmo - ammo; if (needed > w.reserve) needed = w.reserve; 
             isReloading = true; updateHUD(); weaponBasePos.y = -0.5;
+            playSound(sounds.reload); // ВОЗВРАЩЕН ЗВУК ПЕРЕЗАРЯДКИ
             setTimeout(() => { ammo += needed; w.reserve -= needed; isReloading = false; updateHUD(); weaponBasePos.y = -0.25; }, w.reloadTime);
         });
 
         document.getElementById('shoot-btn').addEventListener('pointerdown', (e) => {
             e.preventDefault(); if (gameState !== 'playing' || isReloading) return;
             const now = Date.now(); const w = weapons[currentWeaponIdx];
-            if (ammo <= 0) return; if (now - lastFireTime < w.fireRate) return; 
+            
+            // ВОЗВРАЩЕН ЗВУК ПУСТОЙ ОБОЙМЫ
+            if (ammo <= 0) {
+                if (now - lastFireTime > 300) { playSound(sounds.empty); lastFireTime = now; }
+                return; 
+            }
+            if (now - lastFireTime < w.fireRate) return; 
             
             ammo--; lastFireTime = now; updateHUD();
             pitch += w.recoil; yaw += (Math.random() - 0.5) * w.recoil * 0.5;
             weaponGroup.position.z += 0.15; weaponGroup.rotation.x += 0.1; muzzleFlash.intensity = 2;
+            
+            playSound(w.snd); // ВОЗВРАЩЕН ЗВУК ВЫСТРЕЛА
 
             raycaster.setFromCamera(screenCenter, camera);
             const intersects = raycaster.intersectObjects(enemies, true); 
@@ -439,6 +462,8 @@
                         }
                     });
 
+                    playSound(sounds.zombieHit); // ВОЗВРАЩЕН ЗВУК ПОПАДАНИЯ ПО ЗОМБИ
+
                     if (rootEnemy.userData.health <= 0) {
                         scene.remove(rootEnemy); enemies.splice(enemies.indexOf(rootEnemy), 1);
                         kills++; killCounter.innerText = `ФРАГОВ: ${kills}`; spawnEnemy();
@@ -452,6 +477,7 @@
 
         document.getElementById('btn-endless').addEventListener('pointerdown', () => {
             if (tg.requestFullscreen && !tg.isFullscreen) tg.requestFullscreen(); 
+            if (audioListener.context.state === 'suspended') audioListener.context.resume(); // ГАРАНТИЯ ВКЛЮЧЕНИЯ ЗВУКА
             document.getElementById('main-menu').style.display = 'none'; document.getElementById('ui-layer').style.display = 'block';
             gameState = 'playing'; updateHUD();
         });
@@ -563,7 +589,6 @@
                 if (camera.position.z > bound) camera.position.z = bound; if (camera.position.z < -bound) camera.position.z = -bound;
             }
 
-            // ТОТ САМЫЙ РЕНДЕР
             renderer.render(scene, camera);
         }
 
