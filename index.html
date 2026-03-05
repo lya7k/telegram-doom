@@ -38,6 +38,11 @@
         
         #kill-counter { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.7); border: 2px solid #ffa500; color: white; padding: 5px 15px; border-radius: 5px; font-weight: 900; font-size: 18px; z-index: 10; text-shadow: 1px 1px 2px #000; }
         
+        /* НОВЫЙ ИНТЕРФЕЙС ДЛЯ ВОЛН */
+        #wave-ui { position: absolute; top: 20px; right: 20px; text-align: right; z-index: 10; pointer-events: none; }
+        #wave-display { color: #ff3333; font-size: 24px; font-weight: 900; text-shadow: 0 0 5px #000, 0 0 10px #ff0000; margin-bottom: 5px; transition: color 0.3s; }
+        #wave-status { color: #fff; font-size: 14px; font-weight: bold; text-shadow: 1px 1px 2px #000; background: rgba(0,0,0,0.7); padding: 5px 10px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.2); }
+
         #buff-display { position: absolute; top: 70px; left: 50%; transform: translateX(-50%); font-weight: bold; font-size: 16px; text-shadow: 0 0 5px #000; padding: 5px 10px; border-radius: 5px; transition: opacity 0.2s; opacity: 0; z-index: 10; pointer-events: none;}
 
         #damage-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, rgba(255,0,0,0) 40%, rgba(255,0,0,0.6) 100%); opacity: 0; pointer-events: none; z-index: 5; transition: opacity 0.1s; }
@@ -70,16 +75,23 @@
         <div id="damage-overlay"></div>
         <div id="look-zone"></div>
         <div class="crosshair"><div class="crosshair-v"></div></div>
-        <div id="kill-counter">ФРАГОВ: 0</div>
-        <div id="buff-display"></div>
         
+        <!-- Верхняя панель (Слева: ХП/Оружие, Центр: Фраги, Справа: Волны) -->
         <div id="hud-top">
             <div>
                 <div id="health-container"><div id="health-bar"></div></div>
                 <div id="ammo-display">ПИСТОЛЕТ</div>
             </div>
+            <div id="kill-counter" style="position: static; transform: none;">ФРАГОВ: 0</div>
             <div id="weapon-btn">🔄 СМЕНИТЬ</div>
         </div>
+
+        <div id="wave-ui">
+            <div id="wave-display">ВОЛНА 1</div>
+            <div id="wave-status">ОСТАЛОСЬ ЗОМБИ: 10</div>
+        </div>
+
+        <div id="buff-display"></div>
 
         <div id="joy-left"><div id="joy-stick"></div></div>
         <div id="shoot-btn" class="action-btn">FIRE</div>
@@ -94,7 +106,7 @@
     </div>
 
     <script>
-        // === НАСТРОЙКИ ===
+        // === ТВОИ ТОЧНЫЕ НАСТРОЙКИ ===
         const ZOMBIE_CONFIG = { scale: 0.025, offsetY: -0.02 };
         const WEAPON_CONFIG = { scale: 1.0, offsetY: 0 }; 
         const ARENA_SIZE = 80;
@@ -155,8 +167,7 @@
         const pointLight = new THREE.PointLight(0xffddaa, 0.8, 60); pointLight.position.set(0, 20, 0); scene.add(pointLight);
 
         // === АУДИОДВИЖОК ===
-        const audioListener = new THREE.AudioListener();
-        camera.add(audioListener);
+        const audioListener = new THREE.AudioListener(); camera.add(audioListener);
         const audioLoader = new THREE.AudioLoader();
 
         const sounds = {
@@ -166,30 +177,43 @@
             hurt: new THREE.Audio(audioListener)
         };
 
-        function loadSound(filename, sndObj) {
-            audioLoader.load(filename, buffer => { sndObj.setBuffer(buffer); sndObj.setVolume(0.8); }, undefined, () => {});
-        }
-
+        function loadSound(filename, sndObj) { audioLoader.load(filename, buffer => { sndObj.setBuffer(buffer); sndObj.setVolume(0.8); }, undefined, () => {}); }
         loadSound('pistol.mp3', sounds.pistol); loadSound('shotgun.mp3', sounds.shotgun);
         loadSound('auto.mp3', sounds.auto); loadSound('empty.mp3', sounds.empty);
         loadSound('reload.mp3', sounds.reload); loadSound('zombie_hit.mp3', sounds.zombieHit);
         loadSound('hurt.mp3', sounds.hurt);
 
-        function playSound(snd) { 
-            if (snd && snd.buffer) { 
-                if (snd.isPlaying) snd.stop(); 
-                snd.play(); 
-            } 
-        }
+        function playSound(snd) { if (snd && snd.buffer) { if (snd.isPlaying) snd.stop(); snd.play(); } }
 
-        // ГАРАНТИЯ ВКЛЮЧЕНИЯ ЗВУКА НА IOS/ANDROID ПРИ ПЕРВОМ КЛИКЕ
         document.body.addEventListener('pointerdown', () => {
-            if (audioListener.context.state === 'suspended') {
-                audioListener.context.resume();
-            }
+            if (audioListener.context.state === 'suspended') audioListener.context.resume();
         }, { once: true });
 
-        // === СИСТЕМА БАФФОВ И ИГРОКА ===
+        // === ЛОГИКА ВОЛН (СЮЖЕТ/ПРОГРЕССИЯ) ===
+        let currentWave = 1;
+        let totalZombiesInWave = 10; 
+        let zombiesKilledThisWave = 0;
+        let maxZombiesOnMap = 10;
+        let isWaveBreak = false;
+
+        function updateWaveUI() {
+            let left = totalZombiesInWave - zombiesKilledThisWave;
+            document.getElementById('wave-display').innerText = `ВОЛНА ${currentWave}`;
+            document.getElementById('wave-status').innerText = `ОСТАЛОСЬ ЗОМБИ: ${left}`;
+        }
+
+        function startNextWave() {
+            currentWave++;
+            totalZombiesInWave = 5 + (currentWave * 5); // 10, 15, 20...
+            maxZombiesOnMap = Math.min(25, 5 + currentWave * 2);
+            zombiesKilledThisWave = 0;
+            isWaveBreak = false;
+            
+            document.getElementById('wave-display').style.color = "#ff3333";
+            updateWaveUI();
+        }
+
+        // === СИСТЕМА ИГРОКА ===
         let gameState = 'menu'; 
         let playerHealth = 100; let kills = 0;
         let speedMultiplier = 1.0; let isInvincible = false;
@@ -201,13 +225,8 @@
 
         function activateBuff(type) {
             buffDisplay.style.opacity = 1;
-            if (type === 'speed') {
-                speedMultiplier = 1.5; speedTimer = 15;
-                buffDisplay.innerText = "⚡ УСКОРЕНИЕ (15с)"; buffDisplay.style.color = "#00ffff"; buffDisplay.style.background = "rgba(0, 255, 255, 0.2)";
-            } else if (type === 'invincible') {
-                isInvincible = true; invincTimer = 15;
-                buffDisplay.innerText = "🛡️ НЕУЯЗВИМОСТЬ (15с)"; buffDisplay.style.color = "#ff00ff"; buffDisplay.style.background = "rgba(255, 0, 255, 0.2)";
-            }
+            if (type === 'speed') { speedMultiplier = 1.5; speedTimer = 15; buffDisplay.innerText = "⚡ УСКОРЕНИЕ (15с)"; buffDisplay.style.color = "#00ffff"; buffDisplay.style.background = "rgba(0, 255, 255, 0.2)"; } 
+            else if (type === 'invincible') { isInvincible = true; invincTimer = 15; buffDisplay.innerText = "🛡️ НЕУЯЗВИМОСТЬ (15с)"; buffDisplay.style.color = "#ff00ff"; buffDisplay.style.background = "rgba(255, 0, 255, 0.2)"; }
         }
 
         function takeDamage(amount) {
@@ -216,8 +235,7 @@
             healthBar.style.width = playerHealth + '%';
             document.getElementById('damage-overlay').style.opacity = 1; 
             setTimeout(() => { document.getElementById('damage-overlay').style.opacity = 0; }, 150);
-            
-            playSound(sounds.hurt); // ВОЗВРАЩЕН ЗВУК УРОНА
+            playSound(sounds.hurt);
 
             if (playerHealth === 0) {
                 gameState = 'gameover'; document.getElementById('final-score').innerText = kills; 
@@ -254,9 +272,7 @@
             gltfLoader.load(w.file, (gltf) => {
                 let m = gltf.scene; m.scale.set(WEAPON_CONFIG.scale, WEAPON_CONFIG.scale, WEAPON_CONFIG.scale); m.position.y = WEAPON_CONFIG.offsetY;
                 w.mesh = m; if (weapons[currentWeaponIdx] === w) buildWeaponModel();
-            }, undefined, () => {
-                w.mesh = createFallbackWeapon(w.color); if (weapons[currentWeaponIdx] === w) buildWeaponModel();
-            });
+            }, undefined, () => { w.mesh = createFallbackWeapon(w.color); if (weapons[currentWeaponIdx] === w) buildWeaponModel(); });
         });
 
         let currentWeaponObj;
@@ -266,7 +282,7 @@
             if (wInfo.mesh) { currentWeaponObj = wInfo.mesh; weaponGroup.add(currentWeaponObj); }
         }
 
-        // === МОДЕЛИ ЗОМБИ ===
+        // === МОДЕЛИ ЗОМБИ И ИСПРАВЛЕННЫЙ ХИТБОКС ===
         let zombieModelTemplate = null;
         gltfLoader.load('zombie.glb', function(gltf) {
             let model = gltf.scene;
@@ -274,8 +290,7 @@
             model.scale.set(ZOMBIE_CONFIG.scale, ZOMBIE_CONFIG.scale, ZOMBIE_CONFIG.scale);
             model.position.y = ZOMBIE_CONFIG.offsetY;
 
-            zombieModelTemplate = new THREE.Group();
-            zombieModelTemplate.add(model);
+            zombieModelTemplate = new THREE.Group(); zombieModelTemplate.add(model);
 
             model.traverse((child) => {
                 if (child.isMesh) {
@@ -298,15 +313,19 @@
                     enemy.add(clonedModel);
                 }
             });
-        }, undefined, () => console.log("zombie.glb не найден. Использованы цилиндры."));
+        }, undefined, () => console.log("zombie.glb не найден."));
 
         const enemies =[]; 
-        const hitboxGeo = new THREE.CylinderGeometry(0.6, 0.6, 2.0, 8); const hitboxMat = new THREE.MeshBasicMaterial({ visible: false }); 
-        const dummyGeo = new THREE.CylinderGeometry(0.5, 0.5, 1.8, 16); const dummyMat = new THREE.MeshLambertMaterial({ color: 0x3d5c3a }); 
+        // ИСПРАВЛЕНИЕ: Радиус хитбокса уменьшен с 0.6 до 0.25 (чтобы надо было целиться точно)
+        const hitboxGeo = new THREE.CylinderGeometry(0.25, 0.25, 2.0, 8); const hitboxMat = new THREE.MeshBasicMaterial({ visible: false }); 
+        const dummyGeo = new THREE.CylinderGeometry(0.4, 0.4, 1.8, 16); const dummyMat = new THREE.MeshLambertMaterial({ color: 0x3d5c3a }); 
 
         function spawnEnemy() {
             const enemyGroup = new THREE.Group();
-            enemyGroup.userData.isEnemy = true; enemyGroup.userData.health = 100; enemyGroup.userData.lastAttack = 0; 
+            enemyGroup.userData.isEnemy = true; 
+            // ХП зомби растет с каждой волной
+            enemyGroup.userData.health = 100 + ((currentWave - 1) * 20); 
+            enemyGroup.userData.lastAttack = 0; 
 
             const hitCylinder = new THREE.Mesh(hitboxGeo, hitboxMat);
             hitCylinder.position.y = 1.0; hitCylinder.userData.isHitbox = true;
@@ -330,38 +349,26 @@
             do { ex = (Math.random() - 0.5) * 76; ez = (Math.random() - 0.5) * 76; } while (Math.abs(ex) < 15 && Math.abs(ez) < 15);
             enemyGroup.position.set(ex, 0, ez); scene.add(enemyGroup); enemies.push(enemyGroup);
         }
-        for(let i = 0; i < 15; i++) spawnEnemy();
 
-        // === СИСТЕМА ЛУТА (PICKUPS) ===
+        // === СИСТЕМА ЛУТА ===
         const pickups =[];
         const pickupTypes =['health', 'ammo', 'speed', 'invincible'];
-        const pickupGeos = {
-            'health': new THREE.BoxGeometry(0.6, 0.6, 0.6), 
-            'ammo': new THREE.BoxGeometry(0.7, 0.4, 0.7),
-            'speed': new THREE.OctahedronGeometry(0.4),
-            'invincible': new THREE.TetrahedronGeometry(0.5)
-        };
-        const pickupMats = {
-            'health': new THREE.MeshLambertMaterial({ color: 0x00ff00, emissive: 0x003300 }),
-            'ammo': new THREE.MeshLambertMaterial({ color: 0xffff00, emissive: 0x333300 }),
-            'speed': new THREE.MeshLambertMaterial({ color: 0x00ffff, emissive: 0x003333 }),
-            'invincible': new THREE.MeshLambertMaterial({ color: 0xff00ff, emissive: 0x330033 })
-        };
+        const pickupGeos = { 'health': new THREE.BoxGeometry(0.6, 0.6, 0.6), 'ammo': new THREE.BoxGeometry(0.7, 0.4, 0.7), 'speed': new THREE.OctahedronGeometry(0.4), 'invincible': new THREE.TetrahedronGeometry(0.5) };
+        const pickupMats = { 'health': new THREE.MeshLambertMaterial({ color: 0x00ff00, emissive: 0x003300 }), 'ammo': new THREE.MeshLambertMaterial({ color: 0xffff00, emissive: 0x333300 }), 'speed': new THREE.MeshLambertMaterial({ color: 0x00ffff, emissive: 0x003333 }), 'invincible': new THREE.MeshLambertMaterial({ color: 0xff00ff, emissive: 0x330033 }) };
 
-        function spawnPickup() {
-            if (pickups.length >= 8 || gameState !== 'playing') return;
-            const type = pickupTypes[Math.floor(Math.random() * pickupTypes.length)];
+        function spawnPickup(forcedType = null, forcedX = null, forcedZ = null) {
+            if (pickups.length >= 15 || gameState !== 'playing') return;
+            const type = forcedType || pickupTypes[Math.floor(Math.random() * pickupTypes.length)];
             const mesh = new THREE.Mesh(pickupGeos[type], pickupMats[type]);
             
-            let px, pz;
-            do { px = (Math.random() - 0.5) * 70; pz = (Math.random() - 0.5) * 70; } 
-            while (Math.abs(px) < 10 && Math.abs(pz) < 10 || checkCollision(px, pz)); 
-            
-            mesh.position.set(px, 1.0, pz); mesh.userData.type = type;
-            scene.add(mesh); pickups.push(mesh);
+            let px = forcedX, pz = forcedZ;
+            if (px === null || pz === null) {
+                do { px = (Math.random() - 0.5) * 70; pz = (Math.random() - 0.5) * 70; } while (Math.abs(px) < 10 && Math.abs(pz) < 10 || checkCollision(px, pz)); 
+            }
+            mesh.position.set(px, 1.0, pz); mesh.userData.type = type; scene.add(mesh); pickups.push(mesh);
             const light = new THREE.PointLight(pickupMats[type].color, 0.5, 5); mesh.add(light);
         }
-        setInterval(spawnPickup, 10000); 
+        setInterval(() => { if (!isWaveBreak) spawnPickup(); }, 12000); 
 
         // === АРЕНА И УКРЫТИЯ ===
         const floorMat = new THREE.MeshLambertMaterial({ map: createFloorTexture() }); 
@@ -387,7 +394,7 @@
             return false;
         }
 
-        // === УПРАВЛЕНИЕ ===
+        // === УПРАВЛЕНИЕ И СТРЕЛЬБА ===
         const raycaster = new THREE.Raycaster(); const screenCenter = new THREE.Vector2(0, 0);
         let moveForward = 0; let moveRight = 0; let yaw = 0; let pitch = 0; 
 
@@ -413,38 +420,24 @@
             else { const w = weapons[currentWeaponIdx]; ammoDisplay.innerText = `${w.name}: ${ammo} | ${w.reserve}`; ammoDisplay.style.color = ammo === 0 ? "#ff5555" : "#ffa500"; }
         }
 
-        document.getElementById('weapon-btn').addEventListener('pointerdown', (e) => {
-            e.preventDefault(); if (isReloading || gameState !== 'playing') return; 
-            currentWeaponIdx = (currentWeaponIdx + 1) % weapons.length;
-            ammo = weapons[currentWeaponIdx].maxAmmo; updateHUD(); buildWeaponModel(); 
-            playSound(sounds.reload); // ВОЗВРАЩЕН ЗВУК ПЕРЕЗАРЯДКИ ПРИ СМЕНЕ
-        });
-
+        document.getElementById('weapon-btn').addEventListener('pointerdown', (e) => { e.preventDefault(); if (isReloading || gameState !== 'playing') return; currentWeaponIdx = (currentWeaponIdx + 1) % weapons.length; ammo = weapons[currentWeaponIdx].maxAmmo; updateHUD(); buildWeaponModel(); playSound(sounds.reload); });
         document.getElementById('reload-btn').addEventListener('pointerdown', (e) => {
-            e.preventDefault(); const w = weapons[currentWeaponIdx];
-            if (isReloading || ammo === w.maxAmmo || w.reserve <= 0 || gameState !== 'playing') return;
+            e.preventDefault(); const w = weapons[currentWeaponIdx]; if (isReloading || ammo === w.maxAmmo || w.reserve <= 0 || gameState !== 'playing') return;
             let needed = w.maxAmmo - ammo; if (needed > w.reserve) needed = w.reserve; 
-            isReloading = true; updateHUD(); weaponBasePos.y = -0.5;
-            playSound(sounds.reload); // ВОЗВРАЩЕН ЗВУК ПЕРЕЗАРЯДКИ
+            isReloading = true; updateHUD(); weaponBasePos.y = -0.5; playSound(sounds.reload);
             setTimeout(() => { ammo += needed; w.reserve -= needed; isReloading = false; updateHUD(); weaponBasePos.y = -0.25; }, w.reloadTime);
         });
 
         document.getElementById('shoot-btn').addEventListener('pointerdown', (e) => {
             e.preventDefault(); if (gameState !== 'playing' || isReloading) return;
             const now = Date.now(); const w = weapons[currentWeaponIdx];
-            
-            // ВОЗВРАЩЕН ЗВУК ПУСТОЙ ОБОЙМЫ
-            if (ammo <= 0) {
-                if (now - lastFireTime > 300) { playSound(sounds.empty); lastFireTime = now; }
-                return; 
-            }
+            if (ammo <= 0) { if (now - lastFireTime > 300) { playSound(sounds.empty); lastFireTime = now; } return; }
             if (now - lastFireTime < w.fireRate) return; 
             
             ammo--; lastFireTime = now; updateHUD();
             pitch += w.recoil; yaw += (Math.random() - 0.5) * w.recoil * 0.5;
             weaponGroup.position.z += 0.15; weaponGroup.rotation.x += 0.1; muzzleFlash.intensity = 2;
-            
-            playSound(w.snd); // ВОЗВРАЩЕН ЗВУК ВЫСТРЕЛА
+            playSound(w.snd); 
 
             raycaster.setFromCamera(screenCenter, camera);
             const intersects = raycaster.intersectObjects(enemies, true); 
@@ -462,11 +455,27 @@
                         }
                     });
 
-                    playSound(sounds.zombieHit); // ВОЗВРАЩЕН ЗВУК ПОПАДАНИЯ ПО ЗОМБИ
+                    playSound(sounds.zombieHit); 
 
+                    // ЛОГИКА УБИЙСТВА И ВОЛН
                     if (rootEnemy.userData.health <= 0) {
                         scene.remove(rootEnemy); enemies.splice(enemies.indexOf(rootEnemy), 1);
-                        kills++; killCounter.innerText = `ФРАГОВ: ${kills}`; spawnEnemy();
+                        kills++; killCounter.innerText = `ФРАГОВ: ${kills}`;
+                        
+                        zombiesKilledThisWave++;
+                        updateWaveUI();
+
+                        if (zombiesKilledThisWave >= totalZombiesInWave) {
+                            isWaveBreak = true;
+                            document.getElementById('wave-status').innerText = `ВОЛНА ПРОЙДЕНА!`;
+                            document.getElementById('wave-display').style.color = "#00ff00"; // Зеленый цвет победы
+                            
+                            // Спавним заслуженный лут прямо возле игрока (с запасом, чтобы не застрял)
+                            spawnPickup('health', camera.position.x + 2, camera.position.z + 2);
+                            spawnPickup('ammo', camera.position.x - 2, camera.position.z - 2);
+
+                            setTimeout(() => { if (gameState === 'playing') startNextWave(); }, 5000);
+                        }
                     }
                 }
             }
@@ -477,8 +486,9 @@
 
         document.getElementById('btn-endless').addEventListener('pointerdown', () => {
             if (tg.requestFullscreen && !tg.isFullscreen) tg.requestFullscreen(); 
-            if (audioListener.context.state === 'suspended') audioListener.context.resume(); // ГАРАНТИЯ ВКЛЮЧЕНИЯ ЗВУКА
+            if (audioListener.context.state === 'suspended') audioListener.context.resume();
             document.getElementById('main-menu').style.display = 'none'; document.getElementById('ui-layer').style.display = 'block';
+            currentWave = 1; totalZombiesInWave = 10; zombiesKilledThisWave = 0; isWaveBreak = false; updateWaveUI();
             gameState = 'playing'; updateHUD();
         });
 
@@ -493,7 +503,10 @@
             pickups.forEach(p => scene.remove(p)); pickups.length = 0;
             
             speedMultiplier = 1.0; isInvincible = false; speedTimer = 0; invincTimer = 0; buffDisplay.style.opacity = 0;
-            for(let i = 0; i < 15; i++) spawnEnemy();
+            
+            currentWave = 1; totalZombiesInWave = 10; zombiesKilledThisWave = 0; isWaveBreak = false;
+            document.getElementById('wave-display').style.color = "#ff3333"; updateWaveUI();
+            
             gameState = 'playing';
         });
 
@@ -509,19 +522,26 @@
                 weaponGroup.position.lerp(weaponBasePos, 0.15); weaponGroup.rotation.x = THREE.MathUtils.lerp(weaponGroup.rotation.x, 0, 0.15);
                 if (muzzleFlash.intensity > 0) muzzleFlash.intensity -= delta * 15; 
 
+                // Плавный спавн зомби во время волны (если на карте мало врагов)
+                if (!isWaveBreak && enemies.length < maxZombiesOnMap && (zombiesKilledThisWave + enemies.length) < totalZombiesInWave) {
+                    if (Math.random() < 0.02) spawnEnemy(); 
+                }
+
                 for (let i = pickups.length - 1; i >= 0; i--) {
-                    let p = pickups[i];
-                    p.rotation.y += delta; p.rotation.x += delta * 0.5; p.position.y = 1.0 + Math.sin(now * 0.003) * 0.2;
-                    
+                    let p = pickups[i]; p.rotation.y += delta; p.rotation.x += delta * 0.5; p.position.y = 1.0 + Math.sin(now * 0.003) * 0.2;
                     let dx = camera.position.x - p.position.x; let dz = camera.position.z - p.position.z;
                     if (Math.sqrt(dx*dx + dz*dz) < 1.5) {
                         if (p.userData.type === 'health') { playerHealth = Math.min(100, playerHealth + 50); healthBar.style.width = playerHealth + '%'; }
                         if (p.userData.type === 'ammo') { const w = weapons[currentWeaponIdx]; w.reserve += w.maxAmmo * 2; updateHUD(); }
                         if (p.userData.type === 'speed') activateBuff('speed');
                         if (p.userData.type === 'invincible') activateBuff('invincible');
+                        playSound(sounds.reload); // Звук подбора предмета
                         scene.remove(p); pickups.splice(i, 1);
                     }
                 }
+
+                // Зомби становятся быстрее с каждой волной!
+                const currentZombieSpeed = 2.5 + (currentWave * 0.2);
 
                 enemies.forEach((enemy, index) => {
                     enemy.lookAt(camera.position.x, enemy.position.y, camera.position.z);
@@ -541,12 +561,11 @@
                         }
                     }
 
-                    let right = new THREE.Vector3(-dir.z, 0, dir.x);
-                    let flankForce = (index % 2 === 0 ? 1 : -1) * 0.5; 
+                    let right = new THREE.Vector3(-dir.z, 0, dir.x); let flankForce = (index % 2 === 0 ? 1 : -1) * 0.5; 
 
                     if (distToPlayer2D > 1.5) {
                         let moveDir = new THREE.Vector3().addScaledVector(dir, 1.0).addScaledVector(sep, 1.5).addScaledVector(right, flankForce).normalize();
-                        const speed = 2.5 * delta;
+                        const speed = currentZombieSpeed * delta;
                         const nextX = enemy.position.x + moveDir.x * speed; const nextZ = enemy.position.z + moveDir.z * speed;
                         
                         const enemyBox = new THREE.Box3(); const enemySize = new THREE.Vector3(1.2, 2.0, 1.2); 
@@ -592,12 +611,7 @@
             renderer.render(scene, camera);
         }
 
-        window.addEventListener('resize', () => { 
-            camera.aspect = window.innerWidth / window.innerHeight; 
-            camera.updateProjectionMatrix(); 
-            renderer.setSize(window.innerWidth, window.innerHeight); 
-        });
-        
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
         animate();
     </script>
 </body>
