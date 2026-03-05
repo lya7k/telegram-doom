@@ -4,13 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Telegram CS Shooter</title>
-    <!-- Базовый движок -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <!-- Загрузчик 3D моделей -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-    <!-- Утилита для клонирования Скелетов -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/SkeletonUtils.js"></script>
-    <!-- Телеграм API -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; touch-action: none; user-select: none; -webkit-user-select: none; font-family: Tahoma, sans-serif; }
@@ -60,7 +56,6 @@
 <body>
     <canvas id="game-canvas"></canvas>
 
-    <!-- ГЛАВНОЕ МЕНЮ -->
     <div id="main-menu">
         <h1>WEB<br>STRIKE</h1>
         <button class="menu-btn" id="btn-endless">Бесконечный режим</button>
@@ -94,6 +89,14 @@
     </div>
 
     <script>
+        // === НАСТРОЙКИ МОДЕЛИ ЗОМБИ (ПОДГОНЯТЬ ЗДЕСЬ!) ===
+        // Если зомби слишком большие/маленькие — меняй scale (попробуй 0.01 или 0.02)
+        // Если они парят над землей — сделай offsetY отрицательным (например -0.5 или -1.0)
+        const ZOMBIE_CONFIG = {
+            scale: 1.8, 
+            offsetY: 0.0  
+        };
+
         const tg = window.Telegram.WebApp;
         if (tg.setHeaderColor) { tg.setHeaderColor('#000000'); tg.setBackgroundColor('#000000'); }
         tg.expand(); if (tg.isVersionAtLeast("6.9")) tg.disableVerticalSwipes(); tg.enableClosingConfirmation();
@@ -107,7 +110,6 @@
         const playerHeight = 1.6; camera.position.y = playerHeight;
         let velocityY = 0; let isGrounded = true; const gravity = -25; const jumpStrength = 10; 
 
-        // СВЕТ
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.9); scene.add(ambientLight);
         const sunLight = new THREE.DirectionalLight(0xffffee, 1.0); sunLight.position.set(50, 100, 50); scene.add(sunLight);
 
@@ -182,70 +184,51 @@
         const dummyGeo = new THREE.CylinderGeometry(0.5, 0.5, 1.8, 16);
         const dummyMat = new THREE.MeshLambertMaterial({ color: 0x3d5c3a }); 
 
+        // ИДЕАЛЬНЫЙ НЕВИДИМЫЙ ХИТБОКС ДЛЯ СТРЕЛЬБЫ
+        const hitboxGeo = new THREE.CylinderGeometry(0.6, 0.6, 2.0, 8);
+        const hitboxMat = new THREE.MeshBasicMaterial({ visible: false }); 
+
         gltfLoader.load('zombie.glb', function(gltf) {
             let model = gltf.scene;
 
             // 1. Очищаем мусорные трансформации из Блендера
             model.position.set(0, 0, 0);
-            model.scale.set(1, 1, 1);
             model.rotation.set(0, 0, 0);
-            model.updateMatrixWorld(true);
-
-            // 2. Считаем габариты ТОЛЬКО по геометрии (Мешам).
-            // Это решает проблему "огромных костей", из-за которых ломался масштаб.
-            const box = new THREE.Box3();
-            model.traverse((child) => {
-                if (child.isMesh) {
-                    child.geometry.computeBoundingBox();
-                    let childBox = child.geometry.boundingBox.clone();
-                    childBox.applyMatrix4(child.matrixWorld);
-                    box.union(childBox);
-                }
-            });
-
-            // Заглушка, если модель пустая (на всякий случай)
-            if (box.isEmpty()) box.setFromCenterAndSize(new THREE.Vector3(0, 0.9, 0), new THREE.Vector3(1, 1.8, 1));
-
-            const size = new THREE.Vector3(); box.getSize(size);
-            const center = new THREE.Vector3(); box.getCenter(center);
-
-            // 3. Высчитываем строгий масштаб (высота 1.8м)
-            const scale = size.y > 0.001 ? 1.8 / size.y : 1;
-
-            // 4. Применяем масштаб ДО оборачивания в группу!
-            model.scale.set(scale, scale, scale);
             
-            // 5. Ставим на пол и центрируем (учитывая новый масштаб)
-            model.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
+            // ПРИМЕНЯЕМ РУЧНЫЕ НАСТРОЙКИ (Они всегда надежнее математики)
+            model.scale.set(ZOMBIE_CONFIG.scale, ZOMBIE_CONFIG.scale, ZOMBIE_CONFIG.scale);
+            model.position.y = ZOMBIE_CONFIG.offsetY;
 
-            // 6. Оборачиваем в Group. Это заморозит правильные смещения
+            // Оборачиваем в Group. Это заморозит правильные смещения
             zombieModelTemplate = new THREE.Group();
             zombieModelTemplate.add(model);
 
-            // 7. Обработка материалов и скрытие мусора ("черных кубов")
+            // Обработка материалов и скрытие мусора
             model.traverse((child) => {
                 if (child.isMesh) {
-                    // Если это дефолтный куб из блендера или хитбокс - скрываем!
                     if (child.name.toLowerCase().includes('cube') || !child.visible) {
                         child.visible = false;
                         return;
                     }
                     child.castShadow = true;
-                    if (child.material) {
-                        // Мы КЛОНИРУЕМ материал, чтобы при попадании краснел один зомби, а не все сразу
-                        child.material = child.material.clone();
-                        // Гарантируем, что поле emissive существует
-                        if (child.material.emissive === undefined) child.material.emissive = new THREE.Color(0x000000);
-                    }
                 }
             });
 
-            // Заменяем зеленые заглушки у уже заспавненных зомби
+            // Заменяем зеленые заглушки
             enemies.forEach(enemy => {
                 const dummy = enemy.getObjectByName('dummy');
                 if (dummy) {
                     enemy.remove(dummy);
                     const clonedModel = THREE.SkeletonUtils.clone(zombieModelTemplate);
+                    
+                    // Клонируем материалы ИНДИВИДУАЛЬНО, чтобы они не краснели все вместе
+                    clonedModel.traverse((child) => {
+                        if (child.isMesh && child.material && child.visible) {
+                            child.material = child.material.clone();
+                            if(child.material.emissive === undefined) child.material.emissive = new THREE.Color(0x000000);
+                        }
+                    });
+                    
                     enemy.add(clonedModel);
                 }
             });
@@ -261,8 +244,23 @@
             enemyGroup.userData.health = 100; 
             enemyGroup.userData.lastAttack = 0; 
 
+            // Добавляем невидимый хитбокс для идеального Raycasting
+            const hitCylinder = new THREE.Mesh(hitboxGeo, hitboxMat);
+            hitCylinder.position.y = 1.0; 
+            hitCylinder.userData.isHitbox = true;
+            enemyGroup.add(hitCylinder);
+
             if (zombieModelTemplate && THREE.SkeletonUtils) {
                 const clonedModel = THREE.SkeletonUtils.clone(zombieModelTemplate);
+                
+                // РЕШЕНИЕ БАГА: Клонируем материалы ИНДИВИДУАЛЬНО
+                clonedModel.traverse((child) => {
+                    if (child.isMesh && child.material && child.visible) {
+                        child.material = child.material.clone();
+                        if(child.material.emissive === undefined) child.material.emissive = new THREE.Color(0x000000);
+                    }
+                });
+
                 enemyGroup.add(clonedModel);
             } else {
                 const dummy = new THREE.Mesh(dummyGeo, dummyMat);
@@ -329,7 +327,7 @@
         const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('game-canvas'), antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
 
-        // === АРЕНА И КОЛЛОННЫ (Препятствия) ===
+        // === АРЕНА И Укрытия ===
         const arenaSize = 80;
         const floorGeo = new THREE.PlaneGeometry(arenaSize, arenaSize); 
         const floorMat = new THREE.MeshLambertMaterial({ color: 0xd2b48c }); 
@@ -346,7 +344,7 @@
             if(Math.abs(px) < 10 && Math.abs(pz) < 10) px += 15; 
             pillar.position.set(px, 4, pz);
             scene.add(pillar);
-            obstacleBoxes.push(new THREE.Box3().setFromObject(pillar)); // Фиксируем Box3 для коллизий
+            obstacleBoxes.push(new THREE.Box3().setFromObject(pillar)); 
         }
 
         const playerBox = new THREE.Box3();
@@ -403,16 +401,18 @@
                 if (rootEnemy.userData && rootEnemy.userData.isEnemy) {
                     rootEnemy.userData.health -= w.damage;
                     
-                    // Безопасная подсветка (вспышка) для зомби
-                    if (hitObj.material && hitObj.material.emissive) {
-                        const origHex = hitObj.material.emissive.getHex();
-                        hitObj.material.emissive.setHex(0xff0000);
-                        setTimeout(() => {
-                            if (hitObj && hitObj.material && hitObj.material.emissive) {
-                                hitObj.material.emissive.setHex(origHex);
-                            }
-                        }, 100);
-                    }
+                    // Безопасная вспышка ТОЛЬКО по этому зомби (находим все его меши)
+                    rootEnemy.traverse((child) => {
+                        if (child.isMesh && child.material && child.material.emissive && !child.userData.isHitbox) {
+                            const origHex = child.material.emissive.getHex();
+                            child.material.emissive.setHex(0xff0000);
+                            setTimeout(() => {
+                                if (child && child.material && child.material.emissive) {
+                                    child.material.emissive.setHex(origHex);
+                                }
+                            }, 100);
+                        }
+                    });
 
                     playSound(sounds.zombieHit);
 
@@ -451,9 +451,16 @@
                     for(let j=0; j<enemies.length; j++) {
                         if (enemy === enemies[j]) continue;
                         let dist = enemy.position.distanceTo(enemies[j].position);
-                        if (dist < 2.0 && dist > 0) {
-                            let push = new THREE.Vector3().subVectors(enemy.position, enemies[j].position).normalize();
-                            push.divideScalar(dist);
+                        
+                        // РЕШЕНИЕ БАГА: Если они слиплись ровно в одной точке (dist = 0), толкаем их рандомно!
+                        if (dist < 2.0) {
+                            let push = new THREE.Vector3();
+                            if (dist < 0.05) {
+                                push.set(Math.random() - 0.5, 0, Math.random() - 0.5).normalize();
+                            } else {
+                                push.subVectors(enemy.position, enemies[j].position).normalize();
+                                push.divideScalar(dist);
+                            }
                             sep.add(push);
                         }
                     }
@@ -468,22 +475,19 @@
                             .addScaledVector(right, flankForce) 
                             .normalize();
 
-                        // ИСПРАВЛЕНИЕ: Коллизия зомби со стенами (AABB Sliding)
+                        // РЕШЕНИЕ БАГА: Старая строчка удалена! Оставлено ТОЛЬКО движение с коллизией:
                         const speed = 2.5 * delta;
                         const nextX = enemy.position.x + moveDir.x * speed;
                         const nextZ = enemy.position.z + moveDir.z * speed;
                         
-                        // Хитбокс для проверки коллизии зомби
                         const enemyBox = new THREE.Box3();
                         const enemySize = new THREE.Vector3(1.2, 2.0, 1.2); 
 
-                        // Проверяем возможность шага по X
                         enemyBox.setFromCenterAndSize(new THREE.Vector3(nextX, 1.0, enemy.position.z), enemySize);
                         let collisionX = false;
                         for(let box of obstacleBoxes) { if(enemyBox.intersectsBox(box)) { collisionX = true; break; } }
                         if (!collisionX) enemy.position.x = nextX;
 
-                        // Проверяем возможность шага по Z
                         enemyBox.setFromCenterAndSize(new THREE.Vector3(enemy.position.x, 1.0, nextZ), enemySize);
                         let collisionZ = false;
                         for(let box of obstacleBoxes) { if(enemyBox.intersectsBox(box)) { collisionZ = true; break; } }
@@ -493,8 +497,9 @@
                         if (now - enemy.userData.lastAttack > 1000) {
                             takeDamage(15); 
                             enemy.userData.lastAttack = now;
-                            enemy.position.addScaledVector(dir, 0.5);
-                            setTimeout(() => { if(enemy.parent) enemy.position.addScaledVector(dir, -0.5); }, 100);
+                            // Легкий отскок при укусе (без ломания позиций)
+                            enemy.position.addScaledVector(dir, 0.2);
+                            setTimeout(() => { if(enemy.parent) enemy.position.addScaledVector(dir, -0.2); }, 100);
                         }
                     }
                 });
