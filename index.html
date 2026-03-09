@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Telegram CS Shooter</title>
-    <!-- Базовый движок -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/SkeletonUtils.js"></script>
@@ -14,11 +13,19 @@
         #game-canvas { width: 100%; height: 100%; display: block; } 
         
         #main-menu { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, #2a2a2a 0%, #050505 100%); z-index: 200; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-        #main-menu h1 { color: #ffa500; font-size: 40px; text-shadow: 0 0 10px #ff8c00; margin-bottom: 50px; text-align: center; font-weight: 900; letter-spacing: 2px; }
-        .menu-btn { background: rgba(255, 165, 0, 0.1); border: 2px solid #ffa500; color: white; padding: 15px 30px; font-size: 20px; font-weight: bold; margin: 10px; border-radius: 5px; width: 80%; max-width: 300px; text-transform: uppercase; box-shadow: 0 0 10px rgba(255,165,0,0.3); transition: 0.2s; }
+        #main-menu h1 { color: #ffa500; font-size: 40px; text-shadow: 0 0 10px #ff8c00; margin-bottom: 30px; text-align: center; font-weight: 900; letter-spacing: 2px; }
+        
+        .menu-btn { background: rgba(255, 165, 0, 0.1); border: 2px solid #ffa500; color: white; padding: 15px 30px; font-size: 18px; font-weight: bold; margin: 10px; border-radius: 5px; width: 80%; max-width: 300px; text-transform: uppercase; box-shadow: 0 0 10px rgba(255,165,0,0.3); transition: 0.2s; cursor: pointer; }
         .menu-btn:active { transform: scale(0.95); background: #ffa500; color: black; }
-        .menu-btn.disabled { border-color: #555; color: #888; background: rgba(0,0,0,0.5); box-shadow: none; }
+        
+        /* ОКНО ТАБЛИЦЫ ЛИДЕРОВ */
+        #leaderboard-modal { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 400px; background: rgba(20,20,20,0.95); border: 2px solid #ffa500; border-radius: 10px; padding: 20px; z-index: 300; display: none; flex-direction: column; align-items: center; box-shadow: 0 0 20px #ffa500; color: white; }
+        #leaderboard-modal h2 { margin: 0 0 15px 0; color: #ffa500; text-shadow: 0 0 5px #ff8c00; text-transform: uppercase; }
+        .lb-row { display: flex; justify-content: space-between; width: 100%; padding: 10px 0; border-bottom: 1px solid #444; font-size: 18px; font-weight: bold; }
+        .lb-row.me { color: #00ff00; text-shadow: 0 0 5px #00ff00; }
+        #close-lb-btn { margin-top: 20px; background: #ff3333; color: white; border: none; padding: 10px 20px; font-size: 16px; font-weight: bold; border-radius: 5px; cursor: pointer; width: 100%; }
 
+        /* ИГРОВОЙ UI */
         #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: none; } 
         #look-zone { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; z-index: 1; }
         
@@ -30,22 +37,17 @@
         .crosshair-v::before { left: 0; top: -12px; width: 2px; height: 8px; }
         .crosshair-v::after { left: 0; bottom: -4px; width: 2px; height: 8px; }
         
-        /* ИСПРАВЛЕННЫЙ UI - Сдвиг вниз от кнопок Телеграма (top: 65px) */
         #hud-top { position: absolute; top: 65px; left: 20px; right: 20px; display: flex; justify-content: space-between; align-items: flex-start; z-index: 10; pointer-events: none; }
-        
-        /* Левая колонка */
         .hud-left { display: flex; flex-direction: column; gap: 8px; pointer-events: auto; }
         #health-container { width: 150px; background: rgba(0,0,0,0.7); border: 2px solid rgba(255,255,255,0.3); border-radius: 5px; padding: 3px; }
         #health-bar { height: 15px; width: 100%; background: linear-gradient(90deg, #ff0000, #ff5555); transition: width 0.2s; }
         #ammo-display { background: rgba(0,0,0,0.7); color: #ffa500; padding: 8px 12px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.2); font-weight: bold; font-size: 16px; text-shadow: 1px 1px 2px #000; width: max-content; }
         #weapon-btn { background: rgba(255,255,255,0.1); color: #fff; padding: 10px 15px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.5); font-weight: bold; cursor: pointer; backdrop-filter: blur(2px); width: max-content; }
         
-        /* Правая колонка (Волны) */
         .hud-right { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; pointer-events: none; }
         #wave-display { color: #ff3333; font-size: 24px; font-weight: 900; text-shadow: 0 0 5px #000, 0 0 10px #ff0000; transition: color 0.3s; }
         #wave-status { color: #fff; font-size: 14px; font-weight: bold; text-shadow: 1px 1px 2px #000; background: rgba(0,0,0,0.7); padding: 5px 10px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.2); }
 
-        /* Центр (Фраги и Баффы) - тоже сдвинуты вниз */
         #kill-counter { position: absolute; top: 65px; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.7); border: 2px solid #ffa500; color: white; padding: 5px 15px; border-radius: 5px; font-weight: 900; font-size: 18px; z-index: 10; text-shadow: 1px 1px 2px #000; }
         #buff-display { position: absolute; top: 115px; left: 50%; transform: translateX(-50%); font-weight: bold; font-size: 16px; text-shadow: 0 0 5px #000; padding: 5px 10px; border-radius: 5px; transition: opacity 0.2s; opacity: 0; z-index: 10; pointer-events: none;}
 
@@ -71,8 +73,15 @@
 
     <div id="main-menu">
         <h1>WEB<br>STRIKE</h1>
-        <button class="menu-btn" id="btn-endless">Начать выживание</button>
+        <button class="menu-btn" id="btn-endless">Начать Выживание</button>
+        <button class="menu-btn" id="btn-leaderboard">Таблица лидеров</button>
         <button class="menu-btn disabled" id="btn-pvp">PvP Режим (Скоро)</button>
+    </div>
+
+    <div id="leaderboard-modal">
+        <h2>ТОП ИГРОКОВ</h2>
+        <div id="lb-content" style="width: 100%;"></div>
+        <button id="close-lb-btn">ЗАКРЫТЬ</button>
     </div>
     
     <div id="ui-layer">
@@ -80,27 +89,22 @@
         <div id="look-zone"></div>
         <div class="crosshair"><div class="crosshair-v"></div></div>
         
-        <!-- Центрированные элементы -->
         <div id="kill-counter">ФРАГОВ: 0</div>
         <div id="buff-display"></div>
         
-        <!-- Верхняя панель -->
         <div id="hud-top">
-            <!-- Левая часть -->
             <div class="hud-left">
                 <div id="health-container"><div id="health-bar"></div></div>
                 <div id="ammo-display">ПИСТОЛЕТ</div>
                 <div id="weapon-btn">🔄 СМЕНИТЬ</div>
             </div>
             
-            <!-- Правая часть -->
             <div class="hud-right">
                 <div id="wave-display">ВОЛНА 1</div>
                 <div id="wave-status">ОСТАЛОСЬ ЗОМБИ: 10</div>
             </div>
         </div>
 
-        <!-- Управление -->
         <div id="joy-left"><div id="joy-stick"></div></div>
         <div id="shoot-btn" class="action-btn">FIRE</div>
         <div id="jump-btn" class="action-btn">JUMP</div>
@@ -109,43 +113,79 @@
 
     <div id="game-over-screen">
         <h1>ВЫ МЕРТВЫ</h1>
-        <p>Фрагов: <span id="final-score">0</span></p>
+        <p>Убито Зомби: <span id="final-score">0</span></p>
         <button id="restart-btn">ИГРАТЬ СНОВА</button>
     </div>
 
     <script>
-        // === ТВОИ ТОЧНЫЕ НАСТРОЙКИ ===
         const ZOMBIE_CONFIG = { scale: 0.025, offsetY: -0.02 };
         const WEAPON_CONFIG = { scale: 1.0, offsetY: 0 }; 
         const ARENA_SIZE = 80;
 
         const tg = window.Telegram.WebApp;
+        let tgUsername = "Вы (Игрок)";
+        if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+            tgUsername = tg.initDataUnsafe.user.first_name || tg.initDataUnsafe.user.username;
+        }
+
         if (tg.setHeaderColor) { tg.setHeaderColor('#000000'); tg.setBackgroundColor('#000000'); }
         tg.expand(); if (tg.isVersionAtLeast("6.9")) tg.disableVerticalSwipes(); tg.enableClosingConfirmation();
 
-        // === ИНИЦИАЛИЗАЦИЯ РЕНДЕРЕРА ===
+        // === ЛОГИКА ТАБЛИЦЫ ЛИДЕРОВ ===
+        // Читаем рекорд из памяти телефона (позже заменим на БД)
+        let myHighScore = parseInt(localStorage.getItem('webstrike_highscore')) || 0;
+
+        const mockTopPlayers =[
+            { name: "JohnWick", score: 154 },
+            { name: "CyberNinja", score: 112 },
+            { name: "Terminator", score: 89 },
+            { name: "NoobSlayer", score: 45 }
+        ];
+
+        document.getElementById('btn-leaderboard').addEventListener('pointerdown', () => {
+            const lbContent = document.getElementById('lb-content');
+            lbContent.innerHTML = '';
+            
+            // Объединяем ботов и игрока
+            let allPlayers = [...mockTopPlayers];
+            // Если игрок набрал больше 0, добавляем его в список
+            if (myHighScore > 0) {
+                // Убираем старую запись игрока, если она там есть, и добавляем новую
+                allPlayers.push({ name: tgUsername, score: myHighScore, isMe: true });
+            }
+
+            // Сортируем по убыванию очков
+            allPlayers.sort((a, b) => b.score - a.score);
+
+            // Выводим Топ-5
+            allPlayers.slice(0, 5).forEach((p, index) => {
+                const row = document.createElement('div');
+                row.className = p.isMe ? 'lb-row me' : 'lb-row';
+                row.innerHTML = `<span>#${index + 1} ${p.name}</span> <span>${p.score} 💀</span>`;
+                lbContent.appendChild(row);
+            });
+
+            document.getElementById('leaderboard-modal').style.display = 'flex';
+        });
+
+        document.getElementById('close-lb-btn').addEventListener('pointerdown', () => {
+            document.getElementById('leaderboard-modal').style.display = 'none';
+        });
+
+        // Дальше идет весь игровой движок (он такой же, как в прошлом шаге)
         const canvas = document.getElementById('game-canvas');
         const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-        // === ГЕНЕРАТОР ТЕКСТУР ===
         function createFloorTexture() {
             const cvs = document.createElement('canvas'); cvs.width = 512; cvs.height = 512;
             const ctx = cvs.getContext('2d');
             ctx.fillStyle = '#1e2124'; ctx.fillRect(0, 0, 512, 512); 
             ctx.strokeStyle = '#111315'; ctx.lineWidth = 4;
-            for(let i=0; i<=512; i+=64) {
-                ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,512); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(512,i); ctx.stroke();
-            }
-            for(let i=0; i<3000; i++) {
-                ctx.fillStyle = `rgba(0,0,0, ${Math.random()*0.3})`;
-                ctx.fillRect(Math.random()*512, Math.random()*512, 2, 2);
-            }
-            const tex = new THREE.CanvasTexture(cvs);
-            tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(ARENA_SIZE/8, ARENA_SIZE/8);
-            return tex;
+            for(let i=0; i<=512; i+=64) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,512); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(512,i); ctx.stroke(); }
+            for(let i=0; i<3000; i++) { ctx.fillStyle = `rgba(0,0,0, ${Math.random()*0.3})`; ctx.fillRect(Math.random()*512, Math.random()*512, 2, 2); }
+            const tex = new THREE.CanvasTexture(cvs); tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(ARENA_SIZE/8, ARENA_SIZE/8); return tex;
         }
 
         function createWallTexture() {
@@ -153,83 +193,30 @@
             const ctx = cvs.getContext('2d');
             ctx.fillStyle = '#2c3e50'; ctx.fillRect(0, 0, 256, 256); 
             ctx.fillStyle = '#34495e';
-            for(let y=0; y<256; y+=32) {
-                let offset = (y/32)%2===0 ? 0 : 32;
-                for(let x=0; x<256; x+=64) ctx.fillRect(x + offset + 2, y + 2, 60, 28);
-            }
-            const tex = new THREE.CanvasTexture(cvs);
-            tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(1, 2);
-            return tex;
+            for(let y=0; y<256; y+=32) { let offset = (y/32)%2===0 ? 0 : 32; for(let x=0; x<256; x+=64) ctx.fillRect(x + offset + 2, y + 2, 60, 28); }
+            const tex = new THREE.CanvasTexture(cvs); tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(1, 2); return tex;
         }
 
-        // === 3D ДВИЖОК ===
-        const scene = new THREE.Scene(); 
-        scene.background = new THREE.Color(0x15181a); 
-        scene.fog = new THREE.Fog(0x15181a, 10, 50); 
-
+        const scene = new THREE.Scene(); scene.background = new THREE.Color(0x15181a); scene.fog = new THREE.Fog(0x15181a, 10, 50); 
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000); scene.add(camera);
-        const playerHeight = 1.6; camera.position.y = playerHeight;
-        let velocityY = 0; let isGrounded = true; const gravity = -25; const jumpStrength = 10; 
-
+        const playerHeight = 1.6; camera.position.y = playerHeight; let velocityY = 0; let isGrounded = true; const gravity = -25; const jumpStrength = 10; 
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.4); scene.add(ambientLight);
         const pointLight = new THREE.PointLight(0xffddaa, 0.8, 60); pointLight.position.set(0, 20, 0); scene.add(pointLight);
 
-        // === АУДИОДВИЖОК ===
-        const audioListener = new THREE.AudioListener(); camera.add(audioListener);
-        const audioLoader = new THREE.AudioLoader();
-
-        const sounds = {
-            pistol: new THREE.Audio(audioListener), shotgun: new THREE.Audio(audioListener),
-            auto: new THREE.Audio(audioListener), empty: new THREE.Audio(audioListener),
-            reload: new THREE.Audio(audioListener), zombieHit: new THREE.Audio(audioListener),
-            hurt: new THREE.Audio(audioListener)
-        };
-
+        const audioListener = new THREE.AudioListener(); camera.add(audioListener); const audioLoader = new THREE.AudioLoader();
+        const sounds = { pistol: new THREE.Audio(audioListener), shotgun: new THREE.Audio(audioListener), auto: new THREE.Audio(audioListener), empty: new THREE.Audio(audioListener), reload: new THREE.Audio(audioListener), zombieHit: new THREE.Audio(audioListener), hurt: new THREE.Audio(audioListener) };
         function loadSound(filename, sndObj) { audioLoader.load(filename, buffer => { sndObj.setBuffer(buffer); sndObj.setVolume(0.8); }, undefined, () => {}); }
-        loadSound('pistol.mp3', sounds.pistol); loadSound('shotgun.mp3', sounds.shotgun);
-        loadSound('auto.mp3', sounds.auto); loadSound('empty.mp3', sounds.empty);
-        loadSound('reload.mp3', sounds.reload); loadSound('zombie_hit.mp3', sounds.zombieHit);
-        loadSound('hurt.mp3', sounds.hurt);
-
+        loadSound('pistol.mp3', sounds.pistol); loadSound('shotgun.mp3', sounds.shotgun); loadSound('auto.mp3', sounds.auto); loadSound('empty.mp3', sounds.empty); loadSound('reload.mp3', sounds.reload); loadSound('zombie_hit.mp3', sounds.zombieHit); loadSound('hurt.mp3', sounds.hurt);
         function playSound(snd) { if (snd && snd.buffer) { if (snd.isPlaying) snd.stop(); snd.play(); } }
 
-        document.body.addEventListener('pointerdown', () => {
-            if (audioListener.context.state === 'suspended') audioListener.context.resume();
-        }, { once: true });
+        document.body.addEventListener('pointerdown', () => { if (audioListener.context.state === 'suspended') audioListener.context.resume(); }, { once: true });
 
-        // === ЛОГИКА ВОЛН ===
-        let currentWave = 1;
-        let totalZombiesInWave = 10; 
-        let zombiesKilledThisWave = 0;
-        let maxZombiesOnMap = 10;
-        let isWaveBreak = false;
+        let currentWave = 1; let totalZombiesInWave = 10; let zombiesKilledThisWave = 0; let maxZombiesOnMap = 10; let isWaveBreak = false;
+        function updateWaveUI() { document.getElementById('wave-display').innerText = `ВОЛНА ${currentWave}`; document.getElementById('wave-status').innerText = `ОСТАЛОСЬ ЗОМБИ: ${totalZombiesInWave - zombiesKilledThisWave}`; }
+        function startNextWave() { currentWave++; totalZombiesInWave = 5 + (currentWave * 5); maxZombiesOnMap = Math.min(25, 5 + currentWave * 2); zombiesKilledThisWave = 0; isWaveBreak = false; document.getElementById('wave-display').style.color = "#ff3333"; updateWaveUI(); }
 
-        function updateWaveUI() {
-            let left = totalZombiesInWave - zombiesKilledThisWave;
-            document.getElementById('wave-display').innerText = `ВОЛНА ${currentWave}`;
-            document.getElementById('wave-status').innerText = `ОСТАЛОСЬ ЗОМБИ: ${left}`;
-        }
-
-        function startNextWave() {
-            currentWave++;
-            totalZombiesInWave = 5 + (currentWave * 5); 
-            maxZombiesOnMap = Math.min(25, 5 + currentWave * 2);
-            zombiesKilledThisWave = 0;
-            isWaveBreak = false;
-            
-            document.getElementById('wave-display').style.color = "#ff3333";
-            updateWaveUI();
-        }
-
-        // === СИСТЕМА ИГРОКА ===
-        let gameState = 'menu'; 
-        let playerHealth = 100; let kills = 0;
-        let speedMultiplier = 1.0; let isInvincible = false;
-        let speedTimer = 0; let invincTimer = 0;
-
-        const healthBar = document.getElementById('health-bar'); 
-        const buffDisplay = document.getElementById('buff-display');
-        const killCounter = document.getElementById('kill-counter');
+        let gameState = 'menu'; let playerHealth = 100; let kills = 0; let speedMultiplier = 1.0; let isInvincible = false; let speedTimer = 0; let invincTimer = 0;
+        const healthBar = document.getElementById('health-bar'); const buffDisplay = document.getElementById('buff-display'); const killCounter = document.getElementById('kill-counter');
 
         function activateBuff(type) {
             buffDisplay.style.opacity = 1;
@@ -239,263 +226,103 @@
 
         function takeDamage(amount) {
             if (gameState !== 'playing' || isInvincible) return; 
-            playerHealth -= amount; if (playerHealth < 0) playerHealth = 0;
-            healthBar.style.width = playerHealth + '%';
-            document.getElementById('damage-overlay').style.opacity = 1; 
-            setTimeout(() => { document.getElementById('damage-overlay').style.opacity = 0; }, 150);
-            playSound(sounds.hurt);
-
+            playerHealth -= amount; if (playerHealth < 0) playerHealth = 0; healthBar.style.width = playerHealth + '%';
+            document.getElementById('damage-overlay').style.opacity = 1; setTimeout(() => { document.getElementById('damage-overlay').style.opacity = 0; }, 150); playSound(sounds.hurt);
             if (playerHealth === 0) {
                 gameState = 'gameover'; document.getElementById('final-score').innerText = kills; 
-                document.getElementById('game-over-screen').style.opacity = 1; 
-                document.getElementById('game-over-screen').style.pointerEvents = 'auto'; 
+                document.getElementById('game-over-screen').style.opacity = 1; document.getElementById('game-over-screen').style.pointerEvents = 'auto'; 
                 joyPointerId = null; lookPointerId = null; moveForward = 0; moveRight = 0;
+                
+                // СОХРАНЕНИЕ РЕКОРДА ДЛЯ ЛИДЕРБОРДА
+                if (kills > myHighScore) {
+                    myHighScore = kills;
+                    localStorage.setItem('webstrike_highscore', myHighScore);
+                }
             }
         }
 
-        // === ОРУЖИЕ ===
-        const weapons =[
-            { name: "ПИСТОЛЕТ", damage: 35, maxAmmo: 12, reserve: 48, recoil: 0.015, reloadTime: 1000, fireRate: 300, color: 0x888888, file: 'pistol.glb', mesh: null, snd: sounds.pistol },
-            { name: "ДРОБОВИК", damage: 100, maxAmmo: 6, reserve: 18, recoil: 0.04, reloadTime: 2000, fireRate: 800, color: 0x333333, file: 'shotgun.glb', mesh: null, snd: sounds.shotgun },
-            { name: "АВТОМАТ", damage: 20, maxAmmo: 30, reserve: 90, recoil: 0.008, reloadTime: 1500, fireRate: 100, color: 0x2e4a2e, file: 'auto.glb', mesh: null, snd: sounds.auto }
-        ];
+        const weapons =[ { name: "ПИСТОЛЕТ", damage: 35, maxAmmo: 12, reserve: 48, recoil: 0.015, reloadTime: 1000, fireRate: 300, color: 0x888888, file: 'pistol.glb', mesh: null, snd: sounds.pistol }, { name: "ДРОБОВИК", damage: 100, maxAmmo: 6, reserve: 18, recoil: 0.04, reloadTime: 2000, fireRate: 800, color: 0x333333, file: 'shotgun.glb', mesh: null, snd: sounds.shotgun }, { name: "АВТОМАТ", damage: 20, maxAmmo: 30, reserve: 90, recoil: 0.008, reloadTime: 1500, fireRate: 100, color: 0x2e4a2e, file: 'auto.glb', mesh: null, snd: sounds.auto } ];
         let currentWeaponIdx = 0; let ammo = weapons[0].maxAmmo; let isReloading = false; let lastFireTime = 0;
-        
-        const gltfLoader = new THREE.GLTFLoader();
-        const weaponGroup = new THREE.Group(); const weaponBasePos = new THREE.Vector3(0.25, -0.25, -0.4); 
-        weaponGroup.position.copy(weaponBasePos); camera.add(weaponGroup); 
-        const muzzleFlash = new THREE.PointLight(0xffaa00, 0, 10); muzzleFlash.position.set(0, 0, -0.5); weaponGroup.add(muzzleFlash);
+        const gltfLoader = new THREE.GLTFLoader(); const weaponGroup = new THREE.Group(); const weaponBasePos = new THREE.Vector3(0.25, -0.25, -0.4); weaponGroup.position.copy(weaponBasePos); camera.add(weaponGroup); const muzzleFlash = new THREE.PointLight(0xffaa00, 0, 10); muzzleFlash.position.set(0, 0, -0.5); weaponGroup.add(muzzleFlash);
+        function createFallbackWeapon(color) { const group = new THREE.Group(); const body = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.1, 0.4), new THREE.MeshLambertMaterial({ color: color })); const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.3, 8), new THREE.MeshLambertMaterial({ color: 0x111111 })); barrel.rotation.x = Math.PI/2; barrel.position.set(0, 0.02, -0.25); const grip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.15, 0.08), new THREE.MeshLambertMaterial({ color: 0x222222 })); grip.rotation.x = -Math.PI/8; grip.position.set(0, -0.08, 0.1); group.add(body, barrel, grip); return group; }
+        weapons.forEach(w => { gltfLoader.load(w.file, (gltf) => { let m = gltf.scene; m.scale.set(WEAPON_CONFIG.scale, WEAPON_CONFIG.scale, WEAPON_CONFIG.scale); m.position.y = WEAPON_CONFIG.offsetY; w.mesh = m; if (weapons[currentWeaponIdx] === w) buildWeaponModel(); }, undefined, () => { w.mesh = createFallbackWeapon(w.color); if (weapons[currentWeaponIdx] === w) buildWeaponModel(); }); });
+        let currentWeaponObj; function buildWeaponModel() { if (currentWeaponObj) weaponGroup.remove(currentWeaponObj); const wInfo = weapons[currentWeaponIdx]; if (wInfo.mesh) { currentWeaponObj = wInfo.mesh; weaponGroup.add(currentWeaponObj); } }
 
-        function createFallbackWeapon(color) {
-            const group = new THREE.Group();
-            const body = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.1, 0.4), new THREE.MeshLambertMaterial({ color: color }));
-            const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.3, 8), new THREE.MeshLambertMaterial({ color: 0x111111 }));
-            barrel.rotation.x = Math.PI/2; barrel.position.set(0, 0.02, -0.25);
-            const grip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.15, 0.08), new THREE.MeshLambertMaterial({ color: 0x222222 }));
-            grip.rotation.x = -Math.PI/8; grip.position.set(0, -0.08, 0.1);
-            group.add(body, barrel, grip);
-            return group;
-        }
-
-        weapons.forEach(w => {
-            gltfLoader.load(w.file, (gltf) => {
-                let m = gltf.scene; m.scale.set(WEAPON_CONFIG.scale, WEAPON_CONFIG.scale, WEAPON_CONFIG.scale); m.position.y = WEAPON_CONFIG.offsetY;
-                w.mesh = m; if (weapons[currentWeaponIdx] === w) buildWeaponModel();
-            }, undefined, () => { w.mesh = createFallbackWeapon(w.color); if (weapons[currentWeaponIdx] === w) buildWeaponModel(); });
-        });
-
-        let currentWeaponObj;
-        function buildWeaponModel() {
-            if (currentWeaponObj) weaponGroup.remove(currentWeaponObj);
-            const wInfo = weapons[currentWeaponIdx];
-            if (wInfo.mesh) { currentWeaponObj = wInfo.mesh; weaponGroup.add(currentWeaponObj); }
-        }
-
-        // === АРЕНА И УКРЫТИЯ (ГЕНЕРИРУЮТСЯ ДО ЗОМБИ) ===
-        const floorMat = new THREE.MeshLambertMaterial({ map: createFloorTexture() }); 
-        const floor = new THREE.Mesh(new THREE.PlaneGeometry(ARENA_SIZE, ARENA_SIZE), floorMat); 
-        floor.rotation.x = -Math.PI / 2; scene.add(floor);
-
-        const obstacleBoxes =[]; 
-        const pillarGeo = new THREE.BoxGeometry(4, 8, 4); 
-        const pillarMat = new THREE.MeshLambertMaterial({ map: createWallTexture() }); 
-
-        for(let i=0; i<15; i++) {
-            const pillar = new THREE.Mesh(pillarGeo, pillarMat);
-            let px = (Math.random() - 0.5) * (ARENA_SIZE - 10); let pz = (Math.random() - 0.5) * (ARENA_SIZE - 10);
-            if(Math.abs(px) < 10 && Math.abs(pz) < 10) px += 15; 
-            pillar.position.set(px, 4, pz); scene.add(pillar);
-            obstacleBoxes.push(new THREE.Box3().setFromObject(pillar)); 
-        }
-
+        const floorMat = new THREE.MeshLambertMaterial({ map: createFloorTexture() }); const floor = new THREE.Mesh(new THREE.PlaneGeometry(ARENA_SIZE, ARENA_SIZE), floorMat); floor.rotation.x = -Math.PI / 2; scene.add(floor);
+        const obstacleBoxes =[]; const pillarGeo = new THREE.BoxGeometry(4, 8, 4); const pillarMat = new THREE.MeshLambertMaterial({ map: createWallTexture() }); 
+        for(let i=0; i<15; i++) { const pillar = new THREE.Mesh(pillarGeo, pillarMat); let px = (Math.random() - 0.5) * (ARENA_SIZE - 10); let pz = (Math.random() - 0.5) * (ARENA_SIZE - 10); if(Math.abs(px) < 10 && Math.abs(pz) < 10) px += 15; pillar.position.set(px, 4, pz); scene.add(pillar); obstacleBoxes.push(new THREE.Box3().setFromObject(pillar)); }
         const playerBox = new THREE.Box3(); const playerSize = new THREE.Vector3(1.6, 2.0, 1.6); 
-        function checkCollision(nx, nz) {
-            playerBox.setFromCenterAndSize(new THREE.Vector3(nx, 1.0, nz), playerSize);
-            for(let box of obstacleBoxes) { if(playerBox.intersectsBox(box)) return true; }
-            return false;
-        }
+        function checkCollision(nx, nz) { playerBox.setFromCenterAndSize(new THREE.Vector3(nx, 1.0, nz), playerSize); for(let box of obstacleBoxes) { if(playerBox.intersectsBox(box)) return true; } return false; }
 
-        // === МОДЕЛИ ЗОМБИ И ХИТБОКС ===
         let zombieModelTemplate = null;
         gltfLoader.load('zombie.glb', function(gltf) {
-            let model = gltf.scene;
-            model.position.set(0, 0, 0); model.rotation.set(0, 0, 0);
-            model.scale.set(ZOMBIE_CONFIG.scale, ZOMBIE_CONFIG.scale, ZOMBIE_CONFIG.scale);
-            model.position.y = ZOMBIE_CONFIG.offsetY;
-
+            let model = gltf.scene; model.position.set(0, 0, 0); model.rotation.set(0, 0, 0); model.scale.set(ZOMBIE_CONFIG.scale, ZOMBIE_CONFIG.scale, ZOMBIE_CONFIG.scale); model.position.y = ZOMBIE_CONFIG.offsetY;
             zombieModelTemplate = new THREE.Group(); zombieModelTemplate.add(model);
-
-            model.traverse((child) => {
-                if (child.isMesh) {
-                    if (child.name.toLowerCase().includes('cube') || !child.visible) { child.visible = false; return; }
-                    child.castShadow = true;
-                }
-            });
-
-            enemies.forEach(enemy => {
-                const dummy = enemy.getObjectByName('dummy');
-                if (dummy) {
-                    enemy.remove(dummy);
-                    const clonedModel = THREE.SkeletonUtils.clone(zombieModelTemplate);
-                    clonedModel.traverse((child) => {
-                        if (child.isMesh && child.material && child.visible) {
-                            child.material = child.material.clone();
-                            if(child.material.emissive === undefined) child.material.emissive = new THREE.Color(0x000000);
-                        }
-                    });
-                    enemy.add(clonedModel);
-                }
-            });
+            model.traverse((child) => { if (child.isMesh) { if (child.name.toLowerCase().includes('cube') || !child.visible) { child.visible = false; return; } child.castShadow = true; } });
+            enemies.forEach(enemy => { const dummy = enemy.getObjectByName('dummy'); if (dummy) { enemy.remove(dummy); const clonedModel = THREE.SkeletonUtils.clone(zombieModelTemplate); clonedModel.traverse((child) => { if (child.isMesh && child.material && child.visible) { child.material = child.material.clone(); if(child.material.emissive === undefined) child.material.emissive = new THREE.Color(0x000000); } }); enemy.add(clonedModel); } });
         }, undefined, () => console.log("zombie.glb не найден."));
 
-        const enemies =[]; 
-        const hitboxGeo = new THREE.CylinderGeometry(0.25, 0.25, 2.0, 8); const hitboxMat = new THREE.MeshBasicMaterial({ visible: false }); 
-        const dummyGeo = new THREE.CylinderGeometry(0.4, 0.4, 1.8, 16); const dummyMat = new THREE.MeshLambertMaterial({ color: 0x3d5c3a }); 
-
+        const enemies =[]; const hitboxGeo = new THREE.CylinderGeometry(0.25, 0.25, 2.0, 8); const hitboxMat = new THREE.MeshBasicMaterial({ visible: false }); const dummyGeo = new THREE.CylinderGeometry(0.4, 0.4, 1.8, 16); const dummyMat = new THREE.MeshLambertMaterial({ color: 0x3d5c3a }); 
         function spawnEnemy() {
-            const enemyGroup = new THREE.Group();
-            enemyGroup.userData.isEnemy = true; 
-            enemyGroup.userData.health = 100 + ((currentWave - 1) * 20); 
-            enemyGroup.userData.lastAttack = 0; 
-
-            const hitCylinder = new THREE.Mesh(hitboxGeo, hitboxMat);
-            hitCylinder.position.y = 1.0; hitCylinder.userData.isHitbox = true;
-            enemyGroup.add(hitCylinder);
-
-            if (zombieModelTemplate) {
-                const clonedModel = THREE.SkeletonUtils.clone(zombieModelTemplate);
-                clonedModel.traverse((child) => {
-                    if (child.isMesh && child.material && child.visible) {
-                        child.material = child.material.clone();
-                        if(child.material.emissive === undefined) child.material.emissive = new THREE.Color(0x000000);
-                    }
-                });
-                enemyGroup.add(clonedModel);
-            } else {
-                const dummy = new THREE.Mesh(dummyGeo, dummyMat); dummy.name = 'dummy'; dummy.position.y = 0.9;
-                enemyGroup.add(dummy);
-            }
-
-            let ex, ez;
-            let validPos = false;
-            let attempts = 0;
-            const tempBox = new THREE.Box3();
-            const tempSize = new THREE.Vector3(1.2, 2.0, 1.2); 
-
+            const enemyGroup = new THREE.Group(); enemyGroup.userData.isEnemy = true; enemyGroup.userData.health = 100 + ((currentWave - 1) * 20); enemyGroup.userData.lastAttack = 0; 
+            const hitCylinder = new THREE.Mesh(hitboxGeo, hitboxMat); hitCylinder.position.y = 1.0; hitCylinder.userData.isHitbox = true; enemyGroup.add(hitCylinder);
+            if (zombieModelTemplate) { const clonedModel = THREE.SkeletonUtils.clone(zombieModelTemplate); clonedModel.traverse((child) => { if (child.isMesh && child.material && child.visible) { child.material = child.material.clone(); if(child.material.emissive === undefined) child.material.emissive = new THREE.Color(0x000000); } }); enemyGroup.add(clonedModel); } 
+            else { const dummy = new THREE.Mesh(dummyGeo, dummyMat); dummy.name = 'dummy'; dummy.position.y = 0.9; enemyGroup.add(dummy); }
+            let ex, ez, validPos = false, attempts = 0; const tempBox = new THREE.Box3(), tempSize = new THREE.Vector3(1.2, 2.0, 1.2); 
             while (!validPos && attempts < 100) {
-                ex = (Math.random() - 0.5) * 76; ez = (Math.random() - 0.5) * 76; 
-                if (Math.abs(ex) < 15 && Math.abs(ez) < 15) { attempts++; continue; }
-                
-                tempBox.setFromCenterAndSize(new THREE.Vector3(ex, 1.0, ez), tempSize);
-                let collision = false;
+                ex = (Math.random() - 0.5) * 76; ez = (Math.random() - 0.5) * 76; if (Math.abs(ex) < 15 && Math.abs(ez) < 15) { attempts++; continue; }
+                tempBox.setFromCenterAndSize(new THREE.Vector3(ex, 1.0, ez), tempSize); let collision = false;
                 for (let box of obstacleBoxes) { if (tempBox.intersectsBox(box)) { collision = true; break; } }
-                
-                if (!collision) validPos = true;
-                attempts++;
+                if (!collision) validPos = true; attempts++;
             }
-
             enemyGroup.position.set(ex, 0, ez); scene.add(enemyGroup); enemies.push(enemyGroup);
         }
+        for(let i = 0; i < 8; i++) spawnEnemy();
 
-        // === СИСТЕМА ЛУТА ===
-        const pickups =[];
-        const pickupTypes =['health', 'ammo', 'speed', 'invincible'];
-        const pickupGeos = { 'health': new THREE.BoxGeometry(0.6, 0.6, 0.6), 'ammo': new THREE.BoxGeometry(0.7, 0.4, 0.7), 'speed': new THREE.OctahedronGeometry(0.4), 'invincible': new THREE.TetrahedronGeometry(0.5) };
-        const pickupMats = { 'health': new THREE.MeshLambertMaterial({ color: 0x00ff00, emissive: 0x003300 }), 'ammo': new THREE.MeshLambertMaterial({ color: 0xffff00, emissive: 0x333300 }), 'speed': new THREE.MeshLambertMaterial({ color: 0x00ffff, emissive: 0x003333 }), 'invincible': new THREE.MeshLambertMaterial({ color: 0xff00ff, emissive: 0x330033 }) };
-
+        const pickups =[]; const pickupTypes =['health', 'ammo', 'speed', 'invincible']; const pickupGeos = { 'health': new THREE.BoxGeometry(0.6, 0.6, 0.6), 'ammo': new THREE.BoxGeometry(0.7, 0.4, 0.7), 'speed': new THREE.OctahedronGeometry(0.4), 'invincible': new THREE.TetrahedronGeometry(0.5) }; const pickupMats = { 'health': new THREE.MeshLambertMaterial({ color: 0x00ff00, emissive: 0x003300 }), 'ammo': new THREE.MeshLambertMaterial({ color: 0xffff00, emissive: 0x333300 }), 'speed': new THREE.MeshLambertMaterial({ color: 0x00ffff, emissive: 0x003333 }), 'invincible': new THREE.MeshLambertMaterial({ color: 0xff00ff, emissive: 0x330033 }) };
         function spawnPickup(forcedType = null, forcedX = null, forcedZ = null) {
-            if (pickups.length >= 15 || gameState !== 'playing') return;
-            const type = forcedType || pickupTypes[Math.floor(Math.random() * pickupTypes.length)];
-            const mesh = new THREE.Mesh(pickupGeos[type], pickupMats[type]);
-            
-            let px = forcedX, pz = forcedZ;
-            if (px === null || pz === null) {
-                do { px = (Math.random() - 0.5) * 70; pz = (Math.random() - 0.5) * 70; } while (Math.abs(px) < 10 && Math.abs(pz) < 10 || checkCollision(px, pz)); 
-            }
-            mesh.position.set(px, 1.0, pz); mesh.userData.type = type; scene.add(mesh); pickups.push(mesh);
-            const light = new THREE.PointLight(pickupMats[type].color, 0.5, 5); mesh.add(light);
+            if (pickups.length >= 15 || gameState !== 'playing') return; const type = forcedType || pickupTypes[Math.floor(Math.random() * pickupTypes.length)]; const mesh = new THREE.Mesh(pickupGeos[type], pickupMats[type]);
+            let px = forcedX, pz = forcedZ; if (px === null || pz === null) { do { px = (Math.random() - 0.5) * 70; pz = (Math.random() - 0.5) * 70; } while (Math.abs(px) < 10 && Math.abs(pz) < 10 || checkCollision(px, pz)); }
+            mesh.position.set(px, 1.0, pz); mesh.userData.type = type; scene.add(mesh); pickups.push(mesh); const light = new THREE.PointLight(pickupMats[type].color, 0.5, 5); mesh.add(light);
         }
         setInterval(() => { if (!isWaveBreak) spawnPickup(); }, 12000); 
 
-        // === УПРАВЛЕНИЕ И СТРЕЛЬБА ===
-        const raycaster = new THREE.Raycaster(); const screenCenter = new THREE.Vector2(0, 0);
-        let moveForward = 0; let moveRight = 0; let yaw = 0; let pitch = 0; 
-
-        const joyLeft = document.getElementById('joy-left'); const joyStick = document.getElementById('joy-stick');
-        let joyPointerId = null; let joyCenter = { x: 0, y: 0 };
-        joyLeft.addEventListener('pointerdown', e => { e.preventDefault(); if(gameState !== 'playing') return; joyPointerId = e.pointerId; joyLeft.setPointerCapture(joyPointerId); const r = joyLeft.getBoundingClientRect(); joyCenter = { x: r.left + r.width/2, y: r.top + r.height/2 }; handleJoyMove(e); joyStick.style.transition='none'; });
-        joyLeft.addEventListener('pointermove', e => { if(joyPointerId===e.pointerId){ e.preventDefault(); handleJoyMove(e); }});
-        const resetJoy = e => { if(joyPointerId===e.pointerId){ e.preventDefault(); joyPointerId=null; joyStick.style.transition='transform 0.1s'; joyStick.style.transform=`translate(0,0)`; moveForward=0; moveRight=0; }};
-        joyLeft.addEventListener('pointerup', resetJoy); joyLeft.addEventListener('pointercancel', resetJoy);
+        const raycaster = new THREE.Raycaster(); const screenCenter = new THREE.Vector2(0, 0); let moveForward = 0; let moveRight = 0; let yaw = 0; let pitch = 0; 
+        const joyLeft = document.getElementById('joy-left'); const joyStick = document.getElementById('joy-stick'); let joyPointerId = null; let joyCenter = { x: 0, y: 0 };
+        joyLeft.addEventListener('pointerdown', e => { e.preventDefault(); if(gameState !== 'playing') return; joyPointerId = e.pointerId; joyLeft.setPointerCapture(joyPointerId); const r = joyLeft.getBoundingClientRect(); joyCenter = { x: r.left + r.width/2, y: r.top + r.height/2 }; handleJoyMove(e); joyStick.style.transition='none'; }); joyLeft.addEventListener('pointermove', e => { if(joyPointerId===e.pointerId){ e.preventDefault(); handleJoyMove(e); }});
+        const resetJoy = e => { if(joyPointerId===e.pointerId){ e.preventDefault(); joyPointerId=null; joyStick.style.transition='transform 0.1s'; joyStick.style.transform=`translate(0,0)`; moveForward=0; moveRight=0; }}; joyLeft.addEventListener('pointerup', resetJoy); joyLeft.addEventListener('pointercancel', resetJoy);
         function handleJoyMove(e) { if(gameState !== 'playing') return; let dx=e.clientX-joyCenter.x; let dy=e.clientY-joyCenter.y; let dist=Math.sqrt(dx*dx+dy*dy); if(dist>30){dx=(dx/dist)*30;dy=(dy/dist)*30;} joyStick.style.transform=`translate(${dx}px,${dy}px)`; moveRight=dx/30; moveForward=dy/30; }
 
         const lookZone = document.getElementById('look-zone'); let lookPointerId = null; let lastTouch = {x:0, y:0};
-        lookZone.addEventListener('pointerdown', e => { e.preventDefault(); if(gameState !== 'playing') return; lookPointerId = e.pointerId; lookZone.setPointerCapture(lookPointerId); lastTouch = {x:e.clientX, y:e.clientY}; });
-        lookZone.addEventListener('pointermove', e => { if(lookPointerId===e.pointerId){ e.preventDefault(); if(gameState !== 'playing') return; yaw-=(e.clientX-lastTouch.x)*0.005; pitch-=(e.clientY-lastTouch.y)*0.005; pitch=Math.max(-Math.PI/2+0.1, Math.min(Math.PI/2-0.1, pitch)); lastTouch={x:e.clientX, y:e.clientY}; }});
-        const resetLook = e => { if(lookPointerId===e.pointerId){ e.preventDefault(); lookPointerId=null; }};
-        lookZone.addEventListener('pointerup', resetLook); lookZone.addEventListener('pointercancel', resetLook);
+        lookZone.addEventListener('pointerdown', e => { e.preventDefault(); if(gameState !== 'playing') return; lookPointerId = e.pointerId; lookZone.setPointerCapture(lookPointerId); lastTouch = {x:e.clientX, y:e.clientY}; }); lookZone.addEventListener('pointermove', e => { if(lookPointerId===e.pointerId){ e.preventDefault(); if(gameState !== 'playing') return; yaw-=(e.clientX-lastTouch.x)*0.005; pitch-=(e.clientY-lastTouch.y)*0.005; pitch=Math.max(-Math.PI/2+0.1, Math.min(Math.PI/2-0.1, pitch)); lastTouch={x:e.clientX, y:e.clientY}; }});
+        const resetLook = e => { if(lookPointerId===e.pointerId){ e.preventDefault(); lookPointerId=null; }}; lookZone.addEventListener('pointerup', resetLook); lookZone.addEventListener('pointercancel', resetLook);
 
         document.getElementById('jump-btn').addEventListener('pointerdown', e => { e.preventDefault(); if(isGrounded && gameState === 'playing'){velocityY=jumpStrength; isGrounded=false;} });
 
         const ammoDisplay = document.getElementById('ammo-display');
-        function updateHUD() {
-            if (isReloading) { ammoDisplay.innerText = `ПЕРЕЗАРЯДКА...`; ammoDisplay.style.color = "#ffaa00"; } 
-            else { const w = weapons[currentWeaponIdx]; ammoDisplay.innerText = `${w.name}: ${ammo} | ${w.reserve}`; ammoDisplay.style.color = ammo === 0 ? "#ff5555" : "#ffa500"; }
-        }
+        function updateHUD() { if (isReloading) { ammoDisplay.innerText = `ПЕРЕЗАРЯДКА...`; ammoDisplay.style.color = "#ffaa00"; } else { const w = weapons[currentWeaponIdx]; ammoDisplay.innerText = `${w.name}: ${ammo} | ${w.reserve}`; ammoDisplay.style.color = ammo === 0 ? "#ff5555" : "#ffa500"; } }
 
         document.getElementById('weapon-btn').addEventListener('pointerdown', (e) => { e.preventDefault(); if (isReloading || gameState !== 'playing') return; currentWeaponIdx = (currentWeaponIdx + 1) % weapons.length; ammo = weapons[currentWeaponIdx].maxAmmo; updateHUD(); buildWeaponModel(); playSound(sounds.reload); });
-        document.getElementById('reload-btn').addEventListener('pointerdown', (e) => {
-            e.preventDefault(); const w = weapons[currentWeaponIdx]; if (isReloading || ammo === w.maxAmmo || w.reserve <= 0 || gameState !== 'playing') return;
-            let needed = w.maxAmmo - ammo; if (needed > w.reserve) needed = w.reserve; 
-            isReloading = true; updateHUD(); weaponBasePos.y = -0.5; playSound(sounds.reload);
-            setTimeout(() => { ammo += needed; w.reserve -= needed; isReloading = false; updateHUD(); weaponBasePos.y = -0.25; }, w.reloadTime);
-        });
+        document.getElementById('reload-btn').addEventListener('pointerdown', (e) => { e.preventDefault(); const w = weapons[currentWeaponIdx]; if (isReloading || ammo === w.maxAmmo || w.reserve <= 0 || gameState !== 'playing') return; let needed = w.maxAmmo - ammo; if (needed > w.reserve) needed = w.reserve; isReloading = true; updateHUD(); weaponBasePos.y = -0.5; playSound(sounds.reload); setTimeout(() => { ammo += needed; w.reserve -= needed; isReloading = false; updateHUD(); weaponBasePos.y = -0.25; }, w.reloadTime); });
 
         document.getElementById('shoot-btn').addEventListener('pointerdown', (e) => {
-            e.preventDefault(); if (gameState !== 'playing' || isReloading) return;
-            const now = Date.now(); const w = weapons[currentWeaponIdx];
-            if (ammo <= 0) { if (now - lastFireTime > 300) { playSound(sounds.empty); lastFireTime = now; } return; }
-            if (now - lastFireTime < w.fireRate) return; 
-            
-            ammo--; lastFireTime = now; updateHUD();
-            pitch += w.recoil; yaw += (Math.random() - 0.5) * w.recoil * 0.5;
-            weaponGroup.position.z += 0.15; weaponGroup.rotation.x += 0.1; muzzleFlash.intensity = 2;
-            playSound(w.snd); 
+            e.preventDefault(); if (gameState !== 'playing' || isReloading) return; const now = Date.now(); const w = weapons[currentWeaponIdx];
+            if (ammo <= 0) { if (now - lastFireTime > 300) { playSound(sounds.empty); lastFireTime = now; } return; } if (now - lastFireTime < w.fireRate) return; 
+            ammo--; lastFireTime = now; updateHUD(); pitch += w.recoil; yaw += (Math.random() - 0.5) * w.recoil * 0.5; weaponGroup.position.z += 0.15; weaponGroup.rotation.x += 0.1; muzzleFlash.intensity = 2; playSound(w.snd); 
 
-            raycaster.setFromCamera(screenCenter, camera);
-            const intersects = raycaster.intersectObjects(enemies, true); 
+            raycaster.setFromCamera(screenCenter, camera); const intersects = raycaster.intersectObjects(enemies, true); 
             if (intersects.length > 0) {
-                let hitObj = intersects[0].object; let rootEnemy = hitObj;
-                while (rootEnemy.parent && !rootEnemy.userData.isEnemy) rootEnemy = rootEnemy.parent;
-
+                let hitObj = intersects[0].object; let rootEnemy = hitObj; while (rootEnemy.parent && !rootEnemy.userData.isEnemy) rootEnemy = rootEnemy.parent;
                 if (rootEnemy.userData && rootEnemy.userData.isEnemy) {
                     rootEnemy.userData.health -= w.damage;
-                    rootEnemy.traverse((child) => {
-                        if (child.isMesh && child.material && child.material.emissive && !child.userData.isHitbox) {
-                            const origHex = child.material.emissive.getHex();
-                            child.material.emissive.setHex(0xff0000);
-                            setTimeout(() => { if (child && child.material && child.material.emissive) child.material.emissive.setHex(origHex); }, 100);
-                        }
-                    });
-
+                    rootEnemy.traverse((child) => { if (child.isMesh && child.material && child.material.emissive && !child.userData.isHitbox) { const origHex = child.material.emissive.getHex(); child.material.emissive.setHex(0xff0000); setTimeout(() => { if (child && child.material && child.material.emissive) child.material.emissive.setHex(origHex); }, 100); } });
                     playSound(sounds.zombieHit); 
-
                     if (rootEnemy.userData.health <= 0) {
-                        scene.remove(rootEnemy); enemies.splice(enemies.indexOf(rootEnemy), 1);
-                        kills++; killCounter.innerText = `ФРАГОВ: ${kills}`;
-                        
-                        if (!isWaveBreak) {
-                            zombiesKilledThisWave++;
-                            updateWaveUI();
-
+                        scene.remove(rootEnemy); enemies.splice(enemies.indexOf(rootEnemy), 1); kills++; killCounter.innerText = `ФРАГОВ: ${kills}`;
+                        if (!isWaveBreak) { zombiesKilledThisWave++; updateWaveUI();
                             if (zombiesKilledThisWave >= totalZombiesInWave) {
-                                isWaveBreak = true;
-                                document.getElementById('wave-status').innerText = `ВОЛНА ПРОЙДЕНА!`;
-                                document.getElementById('wave-display').style.color = "#00ff00"; 
-                                
-                                spawnPickup('health', camera.position.x + 2, camera.position.z + 2);
-                                spawnPickup('ammo', camera.position.x - 2, camera.position.z - 2);
-
+                                isWaveBreak = true; document.getElementById('wave-status').innerText = `ВОЛНА ПРОЙДЕНА!`; document.getElementById('wave-display').style.color = "#00ff00"; 
+                                spawnPickup('health', camera.position.x + 2, camera.position.z + 2); spawnPickup('ammo', camera.position.x - 2, camera.position.z - 2);
                                 setTimeout(() => { if (gameState === 'playing') startNextWave(); }, 5000);
                             }
                         }
@@ -504,62 +331,35 @@
             }
         });
 
-        // === СТАРТ И РЕСТАРТ ===
         document.getElementById('btn-endless').addEventListener('pointerdown', () => {
-            if (tg.requestFullscreen && !tg.isFullscreen) tg.requestFullscreen(); 
-            if (audioListener.context.state === 'suspended') audioListener.context.resume();
+            if (tg.requestFullscreen && !tg.isFullscreen) tg.requestFullscreen(); if (audioListener.context.state === 'suspended') audioListener.context.resume();
             document.getElementById('main-menu').style.display = 'none'; document.getElementById('ui-layer').style.display = 'block';
-            
-            enemies.forEach(e => scene.remove(e)); enemies.length = 0;
-            pickups.forEach(p => scene.remove(p)); pickups.length = 0;
-            
-            currentWave = 1; totalZombiesInWave = 10; zombiesKilledThisWave = 0; isWaveBreak = false; 
-            document.getElementById('wave-display').style.color = "#ff3333"; updateWaveUI();
-            
+            enemies.forEach(e => scene.remove(e)); enemies.length = 0; pickups.forEach(p => scene.remove(p)); pickups.length = 0;
+            currentWave = 1; totalZombiesInWave = 10; zombiesKilledThisWave = 0; isWaveBreak = false; document.getElementById('wave-display').style.color = "#ff3333"; updateWaveUI();
             for(let i = 0; i < 10; i++) spawnEnemy(); 
-            
             gameState = 'playing'; updateHUD();
         });
 
         document.getElementById('restart-btn').addEventListener('pointerdown', (e) => {
             e.preventDefault(); playerHealth = 100; healthBar.style.width = '100%'; kills = 0; killCounter.innerText = `ФРАГОВ: 0`;
-            weapons[0].reserve = 48; weapons[1].reserve = 18; weapons[2].reserve = 90;
-            ammo = weapons[currentWeaponIdx].maxAmmo; isReloading = false; updateHUD();
-            
-            document.getElementById('game-over-screen').style.opacity = 0; 
-            document.getElementById('game-over-screen').style.pointerEvents = 'none'; 
-            
+            weapons[0].reserve = 48; weapons[1].reserve = 18; weapons[2].reserve = 90; ammo = weapons[currentWeaponIdx].maxAmmo; isReloading = false; updateHUD();
+            document.getElementById('game-over-screen').style.opacity = 0; document.getElementById('game-over-screen').style.pointerEvents = 'none'; 
             camera.position.set(0, playerHeight, 0); yaw = 0; pitch = 0;
-            
-            enemies.forEach(e => scene.remove(e)); enemies.length = 0;
-            pickups.forEach(p => scene.remove(p)); pickups.length = 0;
+            enemies.forEach(e => scene.remove(e)); enemies.length = 0; pickups.forEach(p => scene.remove(p)); pickups.length = 0;
             speedMultiplier = 1.0; isInvincible = false; speedTimer = 0; invincTimer = 0; buffDisplay.style.opacity = 0;
-            
-            currentWave = 1; totalZombiesInWave = 10; zombiesKilledThisWave = 0; isWaveBreak = false;
-            document.getElementById('wave-display').style.color = "#ff3333"; updateWaveUI();
-            
-            for(let i = 0; i < 10; i++) spawnEnemy();
-            gameState = 'playing';
+            currentWave = 1; totalZombiesInWave = 10; zombiesKilledThisWave = 0; isWaveBreak = false; document.getElementById('wave-display').style.color = "#ff3333"; updateWaveUI();
+            for(let i = 0; i < 10; i++) spawnEnemy(); gameState = 'playing';
         });
 
-        // === ИГРОВОЙ ЦИКЛ ===
         const clock = new THREE.Clock();
-
         function animate() {
-            requestAnimationFrame(animate);
-            const delta = Math.min(clock.getDelta(), 0.1);
-            const now = Date.now();
-
+            requestAnimationFrame(animate); const delta = Math.min(clock.getDelta(), 0.1); const now = Date.now();
             if (gameState === 'playing') {
                 if (speedTimer > 0) { speedTimer -= delta; buffDisplay.innerText = `⚡ УСКОРЕНИЕ (${Math.ceil(speedTimer)}с)`; if (speedTimer <= 0) { speedMultiplier = 1.0; buffDisplay.style.opacity = 0; } }
                 if (invincTimer > 0) { invincTimer -= delta; buffDisplay.innerText = `🛡️ НЕУЯЗВИМОСТЬ (${Math.ceil(invincTimer)}с)`; if (invincTimer <= 0) { isInvincible = false; buffDisplay.style.opacity = 0; } }
+                weaponGroup.position.lerp(weaponBasePos, 0.15); weaponGroup.rotation.x = THREE.MathUtils.lerp(weaponGroup.rotation.x, 0, 0.15); if (muzzleFlash.intensity > 0) muzzleFlash.intensity -= delta * 15; 
 
-                weaponGroup.position.lerp(weaponBasePos, 0.15); weaponGroup.rotation.x = THREE.MathUtils.lerp(weaponGroup.rotation.x, 0, 0.15);
-                if (muzzleFlash.intensity > 0) muzzleFlash.intensity -= delta * 15; 
-
-                if (!isWaveBreak && enemies.length < maxZombiesOnMap && (zombiesKilledThisWave + enemies.length) < totalZombiesInWave) {
-                    if (Math.random() < 0.05) spawnEnemy(); 
-                }
+                if (!isWaveBreak && enemies.length < maxZombiesOnMap && (zombiesKilledThisWave + enemies.length) < totalZombiesInWave) { if (Math.random() < 0.05) spawnEnemy(); }
 
                 for (let i = pickups.length - 1; i >= 0; i--) {
                     let p = pickups[i]; p.rotation.y += delta; p.rotation.x += delta * 0.5; p.position.y = 1.0 + Math.sin(now * 0.003) * 0.2;
@@ -569,81 +369,38 @@
                         if (p.userData.type === 'ammo') { const w = weapons[currentWeaponIdx]; w.reserve += w.maxAmmo * 2; updateHUD(); }
                         if (p.userData.type === 'speed') activateBuff('speed');
                         if (p.userData.type === 'invincible') activateBuff('invincible');
-                        playSound(sounds.reload); 
-                        scene.remove(p); pickups.splice(i, 1);
+                        playSound(sounds.reload); scene.remove(p); pickups.splice(i, 1);
                     }
                 }
 
                 const currentZombieSpeed = 2.5 + (currentWave * 0.2);
-
                 enemies.forEach((enemy, index) => {
                     enemy.lookAt(camera.position.x, enemy.position.y, camera.position.z);
-                    const dx = camera.position.x - enemy.position.x; const dz = camera.position.z - enemy.position.z;
-                    const distToPlayer2D = Math.sqrt(dx * dx + dz * dz);
-                    let dir = new THREE.Vector3(dx, 0, dz).normalize();
-
-                    let sep = new THREE.Vector3();
-                    for(let j=0; j<enemies.length; j++) {
-                        if (enemy === enemies[j]) continue;
-                        let dist = enemy.position.distanceTo(enemies[j].position);
-                        if (dist < 2.0) {
-                            let push = new THREE.Vector3();
-                            if (dist < 0.05) push.set(Math.random()-0.5, 0, Math.random()-0.5).normalize();
-                            else { push.subVectors(enemy.position, enemies[j].position).normalize(); push.divideScalar(dist); }
-                            sep.add(push);
-                        }
-                    }
-
+                    const dx = camera.position.x - enemy.position.x; const dz = camera.position.z - enemy.position.z; const distToPlayer2D = Math.sqrt(dx * dx + dz * dz);
+                    let dir = new THREE.Vector3(dx, 0, dz).normalize(); let sep = new THREE.Vector3();
+                    for(let j=0; j<enemies.length; j++) { if (enemy === enemies[j]) continue; let dist = enemy.position.distanceTo(enemies[j].position); if (dist < 2.0) { let push = new THREE.Vector3(); if (dist < 0.05) push.set(Math.random()-0.5, 0, Math.random()-0.5).normalize(); else { push.subVectors(enemy.position, enemies[j].position).normalize(); push.divideScalar(dist); } sep.add(push); } }
                     let right = new THREE.Vector3(-dir.z, 0, dir.x); let flankForce = (index % 2 === 0 ? 1 : -1) * 0.5; 
-
                     if (distToPlayer2D > 1.5) {
-                        let moveDir = new THREE.Vector3().addScaledVector(dir, 1.0).addScaledVector(sep, 1.5).addScaledVector(right, flankForce).normalize();
-                        const speed = currentZombieSpeed * delta;
+                        let moveDir = new THREE.Vector3().addScaledVector(dir, 1.0).addScaledVector(sep, 1.5).addScaledVector(right, flankForce).normalize(); const speed = currentZombieSpeed * delta;
                         const nextX = enemy.position.x + moveDir.x * speed; const nextZ = enemy.position.z + moveDir.z * speed;
-                        
                         const enemyBox = new THREE.Box3(); const enemySize = new THREE.Vector3(1.2, 2.0, 1.2); 
-                        enemyBox.setFromCenterAndSize(new THREE.Vector3(nextX, 1.0, enemy.position.z), enemySize);
-                        let collisionX = false; for(let box of obstacleBoxes) if(enemyBox.intersectsBox(box)) collisionX = true;
-                        if (!collisionX) enemy.position.x = nextX;
-
-                        enemyBox.setFromCenterAndSize(new THREE.Vector3(enemy.position.x, 1.0, nextZ), enemySize);
-                        let collisionZ = false; for(let box of obstacleBoxes) if(enemyBox.intersectsBox(box)) collisionZ = true;
-                        if (!collisionZ) enemy.position.z = nextZ;
+                        enemyBox.setFromCenterAndSize(new THREE.Vector3(nextX, 1.0, enemy.position.z), enemySize); let collisionX = false; for(let box of obstacleBoxes) if(enemyBox.intersectsBox(box)) collisionX = true; if (!collisionX) enemy.position.x = nextX;
+                        enemyBox.setFromCenterAndSize(new THREE.Vector3(enemy.position.x, 1.0, nextZ), enemySize); let collisionZ = false; for(let box of obstacleBoxes) if(enemyBox.intersectsBox(box)) collisionZ = true; if (!collisionZ) enemy.position.z = nextZ;
                     } else {
-                        if (now - enemy.userData.lastAttack > 1000) {
-                            takeDamage(15); enemy.userData.lastAttack = now;
-                            enemy.position.addScaledVector(dir, 0.2); setTimeout(() => { if(enemy.parent) enemy.position.addScaledVector(dir, -0.2); }, 100);
-                        }
+                        if (now - enemy.userData.lastAttack > 1000) { takeDamage(15); enemy.userData.lastAttack = now; enemy.position.addScaledVector(dir, 0.2); setTimeout(() => { if(enemy.parent) enemy.position.addScaledVector(dir, -0.2); }, 100); }
                     }
                 });
 
-                velocityY += gravity * delta; camera.position.y += velocityY * delta;
-                if (camera.position.y <= playerHeight) { camera.position.y = playerHeight; velocityY = 0; isGrounded = true; }
-
+                velocityY += gravity * delta; camera.position.y += velocityY * delta; if (camera.position.y <= playerHeight) { camera.position.y = playerHeight; velocityY = 0; isGrounded = true; }
                 const euler = new THREE.Euler(0, 0, 0, 'YXZ'); euler.x = pitch; euler.y = yaw; camera.quaternion.setFromEuler(euler);
-
-                const speed = (7 * speedMultiplier) * delta;
-                const direction = new THREE.Vector3(); camera.getWorldDirection(direction); direction.y = 0; direction.normalize();
-                const rightVector = new THREE.Vector3(); rightVector.crossVectors(direction, camera.up).normalize();
-
-                if (isGrounded && (Math.abs(moveForward) > 0.1 || Math.abs(moveRight) > 0.1)) {
-                    const time = Date.now() * (0.005 * speedMultiplier); weaponGroup.position.y = weaponBasePos.y + Math.sin(time) * 0.02; weaponGroup.position.x = weaponBasePos.x + Math.cos(time) * 0.01;
-                }
-
-                let nextX = camera.position.x - moveForward * speed * direction.x + moveRight * speed * rightVector.x;
-                let nextZ = camera.position.z - moveForward * speed * direction.z + moveRight * speed * rightVector.z;
-                
-                if (!checkCollision(nextX, camera.position.z)) camera.position.x = nextX;
-                if (!checkCollision(camera.position.x, nextZ)) camera.position.z = nextZ;
-                
-                const bound = (ARENA_SIZE / 2) - 1.5;
-                if (camera.position.x > bound) camera.position.x = bound; if (camera.position.x < -bound) camera.position.x = -bound;
-                if (camera.position.z > bound) camera.position.z = bound; if (camera.position.z < -bound) camera.position.z = -bound;
+                const speed = (7 * speedMultiplier) * delta; const direction = new THREE.Vector3(); camera.getWorldDirection(direction); direction.y = 0; direction.normalize(); const rightVector = new THREE.Vector3(); rightVector.crossVectors(direction, camera.up).normalize();
+                if (isGrounded && (Math.abs(moveForward) > 0.1 || Math.abs(moveRight) > 0.1)) { const time = Date.now() * (0.005 * speedMultiplier); weaponGroup.position.y = weaponBasePos.y + Math.sin(time) * 0.02; weaponGroup.position.x = weaponBasePos.x + Math.cos(time) * 0.01; }
+                let nextX = camera.position.x - moveForward * speed * direction.x + moveRight * speed * rightVector.x; let nextZ = camera.position.z - moveForward * speed * direction.z + moveRight * speed * rightVector.z;
+                if (!checkCollision(nextX, camera.position.z)) camera.position.x = nextX; if (!checkCollision(camera.position.x, nextZ)) camera.position.z = nextZ;
+                const bound = (ARENA_SIZE / 2) - 1.5; if (camera.position.x > bound) camera.position.x = bound; if (camera.position.x < -bound) camera.position.x = -bound; if (camera.position.z > bound) camera.position.z = bound; if (camera.position.z < -bound) camera.position.z = -bound;
             }
-
             renderer.render(scene, camera);
         }
-
         window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
         animate();
     </script>
