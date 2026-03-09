@@ -30,23 +30,27 @@
         .crosshair-v::before { left: 0; top: -12px; width: 2px; height: 8px; }
         .crosshair-v::after { left: 0; bottom: -4px; width: 2px; height: 8px; }
         
-        #hud-top { position: absolute; top: 20px; left: 20px; right: 20px; display: flex; justify-content: space-between; align-items: flex-start; z-index: 10; pointer-events: none; }
-        #health-container { width: 150px; background: rgba(0,0,0,0.7); border: 2px solid rgba(255,255,255,0.3); border-radius: 5px; padding: 3px; margin-bottom: 5px; }
+        /* ИСПРАВЛЕННЫЙ UI - Сдвиг вниз от кнопок Телеграма (top: 65px) */
+        #hud-top { position: absolute; top: 65px; left: 20px; right: 20px; display: flex; justify-content: space-between; align-items: flex-start; z-index: 10; pointer-events: none; }
+        
+        /* Левая колонка */
+        .hud-left { display: flex; flex-direction: column; gap: 8px; pointer-events: auto; }
+        #health-container { width: 150px; background: rgba(0,0,0,0.7); border: 2px solid rgba(255,255,255,0.3); border-radius: 5px; padding: 3px; }
         #health-bar { height: 15px; width: 100%; background: linear-gradient(90deg, #ff0000, #ff5555); transition: width 0.2s; }
-        #ammo-display { background: rgba(0,0,0,0.7); color: #ffa500; padding: 8px 12px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.2); font-weight: bold; font-size: 16px; text-shadow: 1px 1px 2px #000; }
-        #weapon-btn { background: rgba(255,255,255,0.1); color: #fff; padding: 10px 15px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.5); font-weight: bold; pointer-events: auto; backdrop-filter: blur(2px); }
+        #ammo-display { background: rgba(0,0,0,0.7); color: #ffa500; padding: 8px 12px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.2); font-weight: bold; font-size: 16px; text-shadow: 1px 1px 2px #000; width: max-content; }
+        #weapon-btn { background: rgba(255,255,255,0.1); color: #fff; padding: 10px 15px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.5); font-weight: bold; cursor: pointer; backdrop-filter: blur(2px); width: max-content; }
         
-        #kill-counter { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.7); border: 2px solid #ffa500; color: white; padding: 5px 15px; border-radius: 5px; font-weight: 900; font-size: 18px; z-index: 10; text-shadow: 1px 1px 2px #000; }
-        
-        #wave-ui { position: absolute; top: 20px; right: 20px; text-align: right; z-index: 10; pointer-events: none; }
-        #wave-display { color: #ff3333; font-size: 24px; font-weight: 900; text-shadow: 0 0 5px #000, 0 0 10px #ff0000; margin-bottom: 5px; transition: color 0.3s; }
+        /* Правая колонка (Волны) */
+        .hud-right { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; pointer-events: none; }
+        #wave-display { color: #ff3333; font-size: 24px; font-weight: 900; text-shadow: 0 0 5px #000, 0 0 10px #ff0000; transition: color 0.3s; }
         #wave-status { color: #fff; font-size: 14px; font-weight: bold; text-shadow: 1px 1px 2px #000; background: rgba(0,0,0,0.7); padding: 5px 10px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.2); }
 
-        #buff-display { position: absolute; top: 70px; left: 50%; transform: translateX(-50%); font-weight: bold; font-size: 16px; text-shadow: 0 0 5px #000; padding: 5px 10px; border-radius: 5px; transition: opacity 0.2s; opacity: 0; z-index: 10; pointer-events: none;}
+        /* Центр (Фраги и Баффы) - тоже сдвинуты вниз */
+        #kill-counter { position: absolute; top: 65px; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.7); border: 2px solid #ffa500; color: white; padding: 5px 15px; border-radius: 5px; font-weight: 900; font-size: 18px; z-index: 10; text-shadow: 1px 1px 2px #000; }
+        #buff-display { position: absolute; top: 115px; left: 50%; transform: translateX(-50%); font-weight: bold; font-size: 16px; text-shadow: 0 0 5px #000; padding: 5px 10px; border-radius: 5px; transition: opacity 0.2s; opacity: 0; z-index: 10; pointer-events: none;}
 
         #damage-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, rgba(255,0,0,0) 40%, rgba(255,0,0,0.6) 100%); opacity: 0; pointer-events: none; z-index: 5; transition: opacity 0.1s; }
 
-        /* ИСПРАВЛЕН БАГ НЕВИДИМОЙ КНОПКИ (Убрано pointer-events: auto с дочерних элементов) */
         #game-over-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; pointer-events: none; opacity: 0; transition: opacity 0.5s; }
         #game-over-screen h1 { color: #ff3333; font-size: 40px; margin: 0 0 10px 0; text-shadow: 0 0 10px #ff0000; }
         #game-over-screen p { color: white; font-size: 20px; margin: 0 0 30px 0; }
@@ -76,22 +80,27 @@
         <div id="look-zone"></div>
         <div class="crosshair"><div class="crosshair-v"></div></div>
         
+        <!-- Центрированные элементы -->
+        <div id="kill-counter">ФРАГОВ: 0</div>
+        <div id="buff-display"></div>
+        
+        <!-- Верхняя панель -->
         <div id="hud-top">
-            <div>
+            <!-- Левая часть -->
+            <div class="hud-left">
                 <div id="health-container"><div id="health-bar"></div></div>
                 <div id="ammo-display">ПИСТОЛЕТ</div>
+                <div id="weapon-btn">🔄 СМЕНИТЬ</div>
             </div>
-            <div id="kill-counter" style="position: static; transform: none;">ФРАГОВ: 0</div>
-            <div id="weapon-btn">🔄 СМЕНИТЬ</div>
+            
+            <!-- Правая часть -->
+            <div class="hud-right">
+                <div id="wave-display">ВОЛНА 1</div>
+                <div id="wave-status">ОСТАЛОСЬ ЗОМБИ: 10</div>
+            </div>
         </div>
 
-        <div id="wave-ui">
-            <div id="wave-display">ВОЛНА 1</div>
-            <div id="wave-status">ОСТАЛОСЬ ЗОМБИ: 10</div>
-        </div>
-
-        <div id="buff-display"></div>
-
+        <!-- Управление -->
         <div id="joy-left"><div id="joy-stick"></div></div>
         <div id="shoot-btn" class="action-btn">FIRE</div>
         <div id="jump-btn" class="action-btn">JUMP</div>
@@ -239,7 +248,6 @@
             if (playerHealth === 0) {
                 gameState = 'gameover'; document.getElementById('final-score').innerText = kills; 
                 document.getElementById('game-over-screen').style.opacity = 1; 
-                // ИСПРАВЛЕНИЕ: Кнопка кликабельна ТОЛЬКО после смерти!
                 document.getElementById('game-over-screen').style.pointerEvents = 'auto'; 
                 joyPointerId = null; lookPointerId = null; moveForward = 0; moveRight = 0;
             }
@@ -283,7 +291,7 @@
             if (wInfo.mesh) { currentWeaponObj = wInfo.mesh; weaponGroup.add(currentWeaponObj); }
         }
 
-        // === ИСПРАВЛЕНИЕ: АРЕНА И УКРЫТИЯ ГЕНЕРИРУЮТСЯ ДО ЗОМБИ ===
+        // === АРЕНА И УКРЫТИЯ (ГЕНЕРИРУЮТСЯ ДО ЗОМБИ) ===
         const floorMat = new THREE.MeshLambertMaterial({ map: createFloorTexture() }); 
         const floor = new THREE.Mesh(new THREE.PlaneGeometry(ARENA_SIZE, ARENA_SIZE), floorMat); 
         floor.rotation.x = -Math.PI / 2; scene.add(floor);
@@ -368,7 +376,6 @@
                 enemyGroup.add(dummy);
             }
 
-            // ИСПРАВЛЕНИЕ: ЗОМБИ БОЛЬШЕ НЕ ЗАСТРЕВАЮТ В КОЛОННАХ
             let ex, ez;
             let validPos = false;
             let attempts = 0;
@@ -376,18 +383,12 @@
             const tempSize = new THREE.Vector3(1.2, 2.0, 1.2); 
 
             while (!validPos && attempts < 100) {
-                ex = (Math.random() - 0.5) * 76; 
-                ez = (Math.random() - 0.5) * 76; 
-                
-                // Проверка: не спавним слишком близко к игроку
+                ex = (Math.random() - 0.5) * 76; ez = (Math.random() - 0.5) * 76; 
                 if (Math.abs(ex) < 15 && Math.abs(ez) < 15) { attempts++; continue; }
                 
-                // Проверка: не спавним внутри колонн!
                 tempBox.setFromCenterAndSize(new THREE.Vector3(ex, 1.0, ez), tempSize);
                 let collision = false;
-                for (let box of obstacleBoxes) {
-                    if (tempBox.intersectsBox(box)) { collision = true; break; }
-                }
+                for (let box of obstacleBoxes) { if (tempBox.intersectsBox(box)) { collision = true; break; } }
                 
                 if (!collision) validPos = true;
                 attempts++;
@@ -395,9 +396,6 @@
 
             enemyGroup.position.set(ex, 0, ez); scene.add(enemyGroup); enemies.push(enemyGroup);
         }
-
-        // Спавним 8 зомби просто для фона Главного Меню
-        for(let i = 0; i < 8; i++) spawnEnemy();
 
         // === СИСТЕМА ЛУТА ===
         const pickups =[];
@@ -482,12 +480,10 @@
 
                     playSound(sounds.zombieHit); 
 
-                    // ЛОГИКА УБИЙСТВА И ВОЛН
                     if (rootEnemy.userData.health <= 0) {
                         scene.remove(rootEnemy); enemies.splice(enemies.indexOf(rootEnemy), 1);
                         kills++; killCounter.innerText = `ФРАГОВ: ${kills}`;
                         
-                        // Защита от двойного вызова волны
                         if (!isWaveBreak) {
                             zombiesKilledThisWave++;
                             updateWaveUI();
@@ -514,14 +510,13 @@
             if (audioListener.context.state === 'suspended') audioListener.context.resume();
             document.getElementById('main-menu').style.display = 'none'; document.getElementById('ui-layer').style.display = 'block';
             
-            // Очищаем фоновых зомби
             enemies.forEach(e => scene.remove(e)); enemies.length = 0;
             pickups.forEach(p => scene.remove(p)); pickups.length = 0;
             
             currentWave = 1; totalZombiesInWave = 10; zombiesKilledThisWave = 0; isWaveBreak = false; 
             document.getElementById('wave-display').style.color = "#ff3333"; updateWaveUI();
             
-            for(let i = 0; i < 10; i++) spawnEnemy(); // Спавним свежую волну 1
+            for(let i = 0; i < 10; i++) spawnEnemy(); 
             
             gameState = 'playing'; updateHUD();
         });
@@ -531,7 +526,6 @@
             weapons[0].reserve = 48; weapons[1].reserve = 18; weapons[2].reserve = 90;
             ammo = weapons[currentWeaponIdx].maxAmmo; isReloading = false; updateHUD();
             
-            // ИСПРАВЛЕНИЕ БАГА КНОПКИ: Снова выключаем кликабельность экрана смерти!
             document.getElementById('game-over-screen').style.opacity = 0; 
             document.getElementById('game-over-screen').style.pointerEvents = 'none'; 
             
