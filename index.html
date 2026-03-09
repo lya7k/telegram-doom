@@ -4,9 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Telegram CS Shooter</title>
+    <!-- Базовый движок -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/SkeletonUtils.js"></script>
+    
+    <!-- НОВОЕ: Клиент Socket.IO для связи с твоим сервером -->
+    <script src="https://cdn.socket.io/4.8.3/socket.io.min.js"></script>
+    
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; touch-action: none; user-select: none; -webkit-user-select: none; font-family: Tahoma, sans-serif; }
@@ -18,14 +23,16 @@
         .menu-btn { background: rgba(255, 165, 0, 0.1); border: 2px solid #ffa500; color: white; padding: 15px 30px; font-size: 18px; font-weight: bold; margin: 10px; border-radius: 5px; width: 80%; max-width: 300px; text-transform: uppercase; box-shadow: 0 0 10px rgba(255,165,0,0.3); transition: 0.2s; cursor: pointer; }
         .menu-btn:active { transform: scale(0.95); background: #ffa500; color: black; }
         
-        /* ОКНО ТАБЛИЦЫ ЛИДЕРОВ */
+        /* Особая кнопка для PvP */
+        #btn-pvp { border-color: #ff3333; color: #ff3333; box-shadow: 0 0 15px rgba(255,50,50,0.4); }
+        #btn-pvp:active { background: #ff3333; color: white; }
+        
         #leaderboard-modal { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 400px; background: rgba(20,20,20,0.95); border: 2px solid #ffa500; border-radius: 10px; padding: 20px; z-index: 300; display: none; flex-direction: column; align-items: center; box-shadow: 0 0 20px #ffa500; color: white; }
         #leaderboard-modal h2 { margin: 0 0 15px 0; color: #ffa500; text-shadow: 0 0 5px #ff8c00; text-transform: uppercase; }
         .lb-row { display: flex; justify-content: space-between; width: 100%; padding: 10px 0; border-bottom: 1px solid #444; font-size: 18px; font-weight: bold; }
         .lb-row.me { color: #00ff00; text-shadow: 0 0 5px #00ff00; }
         #close-lb-btn { margin-top: 20px; background: #ff3333; color: white; border: none; padding: 10px 20px; font-size: 16px; font-weight: bold; border-radius: 5px; cursor: pointer; width: 100%; }
 
-        /* ИГРОВОЙ UI */
         #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: none; } 
         #look-zone { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; z-index: 1; }
         
@@ -73,9 +80,9 @@
 
     <div id="main-menu">
         <h1>WEB<br>STRIKE</h1>
-        <button class="menu-btn" id="btn-endless">Начать Выживание</button>
+        <button class="menu-btn" id="btn-endless">Одиночная игра</button>
+        <button class="menu-btn" id="btn-pvp">Сетевая игра (PvP)</button>
         <button class="menu-btn" id="btn-leaderboard">Таблица лидеров</button>
-        <button class="menu-btn disabled" id="btn-pvp">PvP Режим (Скоро)</button>
     </div>
 
     <div id="leaderboard-modal">
@@ -99,7 +106,7 @@
                 <div id="weapon-btn">🔄 СМЕНИТЬ</div>
             </div>
             
-            <div class="hud-right">
+            <div class="hud-right" id="wave-container">
                 <div id="wave-display">ВОЛНА 1</div>
                 <div id="wave-status">ОСТАЛОСЬ ЗОМБИ: 10</div>
             </div>
@@ -113,7 +120,7 @@
 
     <div id="game-over-screen">
         <h1>ВЫ МЕРТВЫ</h1>
-        <p>Убито Зомби: <span id="final-score">0</span></p>
+        <p>Фрагов: <span id="final-score">0</span></p>
         <button id="restart-btn">ИГРАТЬ СНОВА</button>
     </div>
 
@@ -124,75 +131,42 @@
 
         const tg = window.Telegram.WebApp;
         let tgUsername = "Вы (Игрок)";
-        if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
-            tgUsername = tg.initDataUnsafe.user.first_name || tg.initDataUnsafe.user.username;
-        }
+        if (tg.initDataUnsafe && tg.initDataUnsafe.user) { tgUsername = tg.initDataUnsafe.user.first_name || tg.initDataUnsafe.user.username; }
 
         if (tg.setHeaderColor) { tg.setHeaderColor('#000000'); tg.setBackgroundColor('#000000'); }
         tg.expand(); if (tg.isVersionAtLeast("6.9")) tg.disableVerticalSwipes(); tg.enableClosingConfirmation();
 
-        // === ЛОГИКА ТАБЛИЦЫ ЛИДЕРОВ ===
-        // Читаем рекорд из памяти телефона (позже заменим на БД)
+        // Лидерборд
         let myHighScore = parseInt(localStorage.getItem('webstrike_highscore')) || 0;
-
-        const mockTopPlayers =[
-            { name: "JohnWick", score: 154 },
-            { name: "CyberNinja", score: 112 },
-            { name: "Terminator", score: 89 },
-            { name: "NoobSlayer", score: 45 }
-        ];
+        const mockTopPlayers =[ { name: "JohnWick", score: 154 }, { name: "CyberNinja", score: 112 }, { name: "Terminator", score: 89 }, { name: "NoobSlayer", score: 45 } ];
 
         document.getElementById('btn-leaderboard').addEventListener('pointerdown', () => {
-            const lbContent = document.getElementById('lb-content');
-            lbContent.innerHTML = '';
-            
-            // Объединяем ботов и игрока
+            const lbContent = document.getElementById('lb-content'); lbContent.innerHTML = '';
             let allPlayers = [...mockTopPlayers];
-            // Если игрок набрал больше 0, добавляем его в список
-            if (myHighScore > 0) {
-                // Убираем старую запись игрока, если она там есть, и добавляем новую
-                allPlayers.push({ name: tgUsername, score: myHighScore, isMe: true });
-            }
-
-            // Сортируем по убыванию очков
+            if (myHighScore > 0) allPlayers.push({ name: tgUsername, score: myHighScore, isMe: true });
             allPlayers.sort((a, b) => b.score - a.score);
-
-            // Выводим Топ-5
             allPlayers.slice(0, 5).forEach((p, index) => {
-                const row = document.createElement('div');
-                row.className = p.isMe ? 'lb-row me' : 'lb-row';
-                row.innerHTML = `<span>#${index + 1} ${p.name}</span> <span>${p.score} 💀</span>`;
-                lbContent.appendChild(row);
+                const row = document.createElement('div'); row.className = p.isMe ? 'lb-row me' : 'lb-row';
+                row.innerHTML = `<span>#${index + 1} ${p.name}</span> <span>${p.score} 💀</span>`; lbContent.appendChild(row);
             });
-
             document.getElementById('leaderboard-modal').style.display = 'flex';
         });
+        document.getElementById('close-lb-btn').addEventListener('pointerdown', () => document.getElementById('leaderboard-modal').style.display = 'none' );
 
-        document.getElementById('close-lb-btn').addEventListener('pointerdown', () => {
-            document.getElementById('leaderboard-modal').style.display = 'none';
-        });
-
-        // Дальше идет весь игровой движок (он такой же, как в прошлом шаге)
-        const canvas = document.getElementById('game-canvas');
-        const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        // Three.js База
+        const canvas = document.getElementById('game-canvas'); const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight); renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
         function createFloorTexture() {
-            const cvs = document.createElement('canvas'); cvs.width = 512; cvs.height = 512;
-            const ctx = cvs.getContext('2d');
-            ctx.fillStyle = '#1e2124'; ctx.fillRect(0, 0, 512, 512); 
-            ctx.strokeStyle = '#111315'; ctx.lineWidth = 4;
+            const cvs = document.createElement('canvas'); cvs.width = 512; cvs.height = 512; const ctx = cvs.getContext('2d');
+            ctx.fillStyle = '#1e2124'; ctx.fillRect(0, 0, 512, 512); ctx.strokeStyle = '#111315'; ctx.lineWidth = 4;
             for(let i=0; i<=512; i+=64) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,512); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(512,i); ctx.stroke(); }
             for(let i=0; i<3000; i++) { ctx.fillStyle = `rgba(0,0,0, ${Math.random()*0.3})`; ctx.fillRect(Math.random()*512, Math.random()*512, 2, 2); }
             const tex = new THREE.CanvasTexture(cvs); tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(ARENA_SIZE/8, ARENA_SIZE/8); return tex;
         }
-
         function createWallTexture() {
-            const cvs = document.createElement('canvas'); cvs.width = 256; cvs.height = 256;
-            const ctx = cvs.getContext('2d');
-            ctx.fillStyle = '#2c3e50'; ctx.fillRect(0, 0, 256, 256); 
-            ctx.fillStyle = '#34495e';
+            const cvs = document.createElement('canvas'); cvs.width = 256; cvs.height = 256; const ctx = cvs.getContext('2d');
+            ctx.fillStyle = '#2c3e50'; ctx.fillRect(0, 0, 256, 256); ctx.fillStyle = '#34495e';
             for(let y=0; y<256; y+=32) { let offset = (y/32)%2===0 ? 0 : 32; for(let x=0; x<256; x+=64) ctx.fillRect(x + offset + 2, y + 2, 60, 28); }
             const tex = new THREE.CanvasTexture(cvs); tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(1, 2); return tex;
         }
@@ -200,9 +174,9 @@
         const scene = new THREE.Scene(); scene.background = new THREE.Color(0x15181a); scene.fog = new THREE.Fog(0x15181a, 10, 50); 
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000); scene.add(camera);
         const playerHeight = 1.6; camera.position.y = playerHeight; let velocityY = 0; let isGrounded = true; const gravity = -25; const jumpStrength = 10; 
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4); scene.add(ambientLight);
-        const pointLight = new THREE.PointLight(0xffddaa, 0.8, 60); pointLight.position.set(0, 20, 0); scene.add(pointLight);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4); scene.add(ambientLight); const pointLight = new THREE.PointLight(0xffddaa, 0.8, 60); pointLight.position.set(0, 20, 0); scene.add(pointLight);
 
+        // Звуки
         const audioListener = new THREE.AudioListener(); camera.add(audioListener); const audioLoader = new THREE.AudioLoader();
         const sounds = { pistol: new THREE.Audio(audioListener), shotgun: new THREE.Audio(audioListener), auto: new THREE.Audio(audioListener), empty: new THREE.Audio(audioListener), reload: new THREE.Audio(audioListener), zombieHit: new THREE.Audio(audioListener), hurt: new THREE.Audio(audioListener) };
         function loadSound(filename, sndObj) { audioLoader.load(filename, buffer => { sndObj.setBuffer(buffer); sndObj.setVolume(0.8); }, undefined, () => {}); }
@@ -210,6 +184,137 @@
         function playSound(snd) { if (snd && snd.buffer) { if (snd.isPlaying) snd.stop(); snd.play(); } }
 
         document.body.addEventListener('pointerdown', () => { if (audioListener.context.state === 'suspended') audioListener.context.resume(); }, { once: true });
+
+
+        // ==========================================
+        // === НОВЫЙ БЛОК: СЕТЕВАЯ ЛОГИКА (PvP) ===
+        // ==========================================
+        let socket = null;
+        let myId = null;
+        const remotePlayers = {}; // Храним 3D-модельки других игроков
+        let isOnlineMode = false; // Флаг режима игры
+        let lastEmitTime = 0;
+
+        function connectToServer() {
+            // Подключаемся к локальному серверу. Когда будешь выкладывать игру в интернет, поменяешь этот адрес на реальный IP сервера.
+            socket = io('http://localhost:3000'); 
+            
+            socket.on('connect', () => {
+                myId = socket.id;
+                console.log("Успешное подключение к серверу! Твой ID:", myId);
+            });
+
+            // Сервер присылает список всех, кто уже был на карте
+            socket.on('currentPlayers', (players) => {
+                Object.keys(players).forEach((id) => {
+                    if (id !== myId) spawnRemotePlayer(players[id]);
+                });
+            });
+
+            // Кто-то новый зашел
+            socket.on('newPlayer', (playerInfo) => {
+                if (playerInfo.id !== myId) spawnRemotePlayer(playerInfo);
+            });
+
+            // Движение других игроков
+            socket.on('playerMoved', (info) => {
+                if (remotePlayers[info.id]) {
+                    // Плавно телепортируем модельку другого игрока
+                    remotePlayers[info.id].position.set(info.x, 0, info.z);
+                    remotePlayers[info.id].rotation.y = info.yaw;
+                }
+            });
+
+            // Кто-то отключился (закрыл вкладку)
+            socket.on('playerDisconnected', (id) => {
+                if (remotePlayers[id]) {
+                    scene.remove(remotePlayers[id]);
+                    delete remotePlayers[id];
+                }
+            });
+
+            // Звук выстрела от другого игрока
+            socket.on('playerShot', (id) => {
+                if (remotePlayers[id]) {
+                    playSound(sounds.pistol);
+                }
+            });
+
+            // Обработка получения урона от сервера
+            socket.on('playerDamaged', (data) => {
+                if (data.id === myId) {
+                    // Мы получили урон от кого-то!
+                    playerHealth = data.health;
+                    healthBar.style.width = playerHealth + '%';
+                    document.getElementById('damage-overlay').style.opacity = 1; 
+                    setTimeout(() => { document.getElementById('damage-overlay').style.opacity = 0; }, 150);
+                    playSound(sounds.hurt);
+                } else if (remotePlayers[data.id]) {
+                    // Подсвечиваем красным чужую модельку, если по ней попали
+                    remotePlayers[data.id].traverse((child) => {
+                        if (child.isMesh && child.material && child.material.emissive) {
+                            const orig = child.material.emissive.getHex();
+                            child.material.emissive.setHex(0xff0000);
+                            setTimeout(() => { if (child.material) child.material.emissive.setHex(orig); }, 100);
+                        }
+                    });
+                }
+            });
+
+            // Кто-то умер
+            socket.on('playerDied', (data) => {
+                if (data.victimId === myId) {
+                    // Убили нас
+                    playerHealth = 0; healthBar.style.width = '0%';
+                    gameState = 'gameover'; document.getElementById('final-score').innerText = kills; 
+                    document.getElementById('game-over-screen').style.opacity = 1; 
+                    document.getElementById('game-over-screen').style.pointerEvents = 'auto'; 
+                    joyPointerId = null; lookPointerId = null; moveForward = 0; moveRight = 0;
+                    console.log("Вас убил игрок:", data.killerId);
+                } else if (remotePlayers[data.victimId]) {
+                    // Умер кто-то другой, убираем его тело
+                    scene.remove(remotePlayers[data.victimId]);
+                    delete remotePlayers[data.victimId];
+                    // Если это мы его убили — зачисляем фраг
+                    if (data.killerId === myId) {
+                        kills++; killCounter.innerText = `ФРАГОВ: ${kills}`;
+                        if (kills > myHighScore) { myHighScore = kills; localStorage.setItem('webstrike_highscore', myHighScore); }
+                    }
+                }
+            });
+            
+            socket.on('playerRespawned', (info) => {
+                 if (info.id !== myId && !remotePlayers[info.id]) {
+                     spawnRemotePlayer(info);
+                 }
+            });
+        }
+
+        // Функция генерации "тела" для другого игрока
+        function spawnRemotePlayer(info) {
+            if (info.isDead) return;
+            const group = new THREE.Group();
+            group.userData.isRemotePlayer = true; // Метка для нашего Рейкастера
+            group.userData.id = info.id;
+            
+            // Туловище спецназовца (синее)
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 0.4), new THREE.MeshLambertMaterial({color: 0x2266cc, emissive: 0x000000}));
+            body.position.y = 1.0; 
+            // Голова
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshLambertMaterial({color: 0xffccaa, emissive: 0x000000}));
+            head.position.y = 1.6; 
+            // Оружие в руках
+            const gun = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.6), new THREE.MeshLambertMaterial({color: 0x111111, emissive: 0x000000}));
+            gun.position.set(0.3, 1.0, -0.4); 
+            
+            group.add(body, head, gun);
+            group.position.set(info.x, 0, info.z);
+            
+            scene.add(group);
+            remotePlayers[info.id] = group; // Сохраняем в список
+        }
+        // ==========================================
+
 
         let currentWave = 1; let totalZombiesInWave = 10; let zombiesKilledThisWave = 0; let maxZombiesOnMap = 10; let isWaveBreak = false;
         function updateWaveUI() { document.getElementById('wave-display').innerText = `ВОЛНА ${currentWave}`; document.getElementById('wave-status').innerText = `ОСТАЛОСЬ ЗОМБИ: ${totalZombiesInWave - zombiesKilledThisWave}`; }
@@ -224,7 +329,8 @@
             else if (type === 'invincible') { isInvincible = true; invincTimer = 15; buffDisplay.innerText = "🛡️ НЕУЯЗВИМОСТЬ (15с)"; buffDisplay.style.color = "#ff00ff"; buffDisplay.style.background = "rgba(255, 0, 255, 0.2)"; }
         }
 
-        function takeDamage(amount) {
+        // Локальное получение урона от зомби (для синглплеера/коопа)
+        function takeDamageLocally(amount) {
             if (gameState !== 'playing' || isInvincible) return; 
             playerHealth -= amount; if (playerHealth < 0) playerHealth = 0; healthBar.style.width = playerHealth + '%';
             document.getElementById('damage-overlay').style.opacity = 1; setTimeout(() => { document.getElementById('damage-overlay').style.opacity = 0; }, 150); playSound(sounds.hurt);
@@ -232,11 +338,11 @@
                 gameState = 'gameover'; document.getElementById('final-score').innerText = kills; 
                 document.getElementById('game-over-screen').style.opacity = 1; document.getElementById('game-over-screen').style.pointerEvents = 'auto'; 
                 joyPointerId = null; lookPointerId = null; moveForward = 0; moveRight = 0;
+                if (kills > myHighScore) { myHighScore = kills; localStorage.setItem('webstrike_highscore', myHighScore); }
                 
-                // СОХРАНЕНИЕ РЕКОРДА ДЛЯ ЛИДЕРБОРДА
-                if (kills > myHighScore) {
-                    myHighScore = kills;
-                    localStorage.setItem('webstrike_highscore', myHighScore);
+                // Если мы в онлайне, говорим серверу что нас съели зомби
+                if (isOnlineMode && socket) {
+                    socket.emit('hit', { targetId: myId, damage: 1000 }); 
                 }
             }
         }
@@ -310,16 +416,37 @@
             if (ammo <= 0) { if (now - lastFireTime > 300) { playSound(sounds.empty); lastFireTime = now; } return; } if (now - lastFireTime < w.fireRate) return; 
             ammo--; lastFireTime = now; updateHUD(); pitch += w.recoil; yaw += (Math.random() - 0.5) * w.recoil * 0.5; weaponGroup.position.z += 0.15; weaponGroup.rotation.x += 0.1; muzzleFlash.intensity = 2; playSound(w.snd); 
 
-            raycaster.setFromCamera(screenCenter, camera); const intersects = raycaster.intersectObjects(enemies, true); 
+            // Оповещаем сервер о звуке выстрела
+            if (isOnlineMode && socket) socket.emit('shoot');
+
+            raycaster.setFromCamera(screenCenter, camera); 
+            
+            // Включаем в прицел и зомби, и ДРУГИХ ИГРОКОВ
+            const potentialTargets =[...enemies, ...Object.values(remotePlayers)];
+            const intersects = raycaster.intersectObjects(potentialTargets, true); 
+            
             if (intersects.length > 0) {
-                let hitObj = intersects[0].object; let rootEnemy = hitObj; while (rootEnemy.parent && !rootEnemy.userData.isEnemy) rootEnemy = rootEnemy.parent;
-                if (rootEnemy.userData && rootEnemy.userData.isEnemy) {
+                let hitObj = intersects[0].object; let rootEnemy = hitObj; 
+                while (rootEnemy.parent && !rootEnemy.userData.isEnemy && !rootEnemy.userData.isRemotePlayer) rootEnemy = rootEnemy.parent;
+
+                // СЦЕНАРИЙ 1: Попали в ИГРОКА
+                if (rootEnemy.userData.isRemotePlayer) {
+                    if (isOnlineMode && socket) {
+                        socket.emit('hit', { targetId: rootEnemy.userData.id, damage: w.damage });
+                        // Локальная вспышка
+                        rootEnemy.traverse((child) => { if (child.isMesh && child.material && child.material.emissive) { const origHex = child.material.emissive.getHex(); child.material.emissive.setHex(0xff0000); setTimeout(() => { if (child.material) child.material.emissive.setHex(origHex); }, 100); } });
+                        playSound(sounds.zombieHit); // Звук попадания в плоть
+                    }
+                }
+                // СЦЕНАРИЙ 2: Попали в ЗОМБИ
+                else if (rootEnemy.userData && rootEnemy.userData.isEnemy) {
                     rootEnemy.userData.health -= w.damage;
                     rootEnemy.traverse((child) => { if (child.isMesh && child.material && child.material.emissive && !child.userData.isHitbox) { const origHex = child.material.emissive.getHex(); child.material.emissive.setHex(0xff0000); setTimeout(() => { if (child && child.material && child.material.emissive) child.material.emissive.setHex(origHex); }, 100); } });
                     playSound(sounds.zombieHit); 
                     if (rootEnemy.userData.health <= 0) {
                         scene.remove(rootEnemy); enemies.splice(enemies.indexOf(rootEnemy), 1); kills++; killCounter.innerText = `ФРАГОВ: ${kills}`;
-                        if (!isWaveBreak) { zombiesKilledThisWave++; updateWaveUI();
+                        if (!isWaveBreak && !isOnlineMode) { 
+                            zombiesKilledThisWave++; updateWaveUI();
                             if (zombiesKilledThisWave >= totalZombiesInWave) {
                                 isWaveBreak = true; document.getElementById('wave-status').innerText = `ВОЛНА ПРОЙДЕНА!`; document.getElementById('wave-display').style.color = "#00ff00"; 
                                 spawnPickup('health', camera.position.x + 2, camera.position.z + 2); spawnPickup('ammo', camera.position.x - 2, camera.position.z - 2);
@@ -331,13 +458,35 @@
             }
         });
 
-        document.getElementById('btn-endless').addEventListener('pointerdown', () => {
-            if (tg.requestFullscreen && !tg.isFullscreen) tg.requestFullscreen(); if (audioListener.context.state === 'suspended') audioListener.context.resume();
+        // === СТАРТ И РЕСТАРТ ===
+        function prepareGameEnv() {
+            if (tg.requestFullscreen && !tg.isFullscreen) tg.requestFullscreen(); 
+            if (audioListener.context.state === 'suspended') audioListener.context.resume();
             document.getElementById('main-menu').style.display = 'none'; document.getElementById('ui-layer').style.display = 'block';
             enemies.forEach(e => scene.remove(e)); enemies.length = 0; pickups.forEach(p => scene.remove(p)); pickups.length = 0;
-            currentWave = 1; totalZombiesInWave = 10; zombiesKilledThisWave = 0; isWaveBreak = false; document.getElementById('wave-display').style.color = "#ff3333"; updateWaveUI();
-            for(let i = 0; i < 10; i++) spawnEnemy(); 
+            currentWave = 1; totalZombiesInWave = 10; zombiesKilledThisWave = 0; isWaveBreak = false; 
+            document.getElementById('wave-display').style.color = "#ff3333"; updateWaveUI();
+            
+            // В онлайне зомби пока отключим, чтобы игроки не запутались
+            if (!isOnlineMode) {
+                for(let i = 0; i < 10; i++) spawnEnemy(); 
+                document.getElementById('wave-container').style.display = 'flex';
+            } else {
+                document.getElementById('wave-container').style.display = 'none'; // Прячем UI волн в PvP
+            }
+            
             gameState = 'playing'; updateHUD();
+        }
+
+        document.getElementById('btn-endless').addEventListener('pointerdown', () => {
+            isOnlineMode = false; prepareGameEnv();
+        });
+
+        // НОВАЯ КНОПКА: ЗАПУСК PvP РЕЖИМА
+        document.getElementById('btn-pvp').addEventListener('pointerdown', () => {
+            isOnlineMode = true; 
+            connectToServer();
+            prepareGameEnv();
         });
 
         document.getElementById('restart-btn').addEventListener('pointerdown', (e) => {
@@ -347,11 +496,19 @@
             camera.position.set(0, playerHeight, 0); yaw = 0; pitch = 0;
             enemies.forEach(e => scene.remove(e)); enemies.length = 0; pickups.forEach(p => scene.remove(p)); pickups.length = 0;
             speedMultiplier = 1.0; isInvincible = false; speedTimer = 0; invincTimer = 0; buffDisplay.style.opacity = 0;
-            currentWave = 1; totalZombiesInWave = 10; zombiesKilledThisWave = 0; isWaveBreak = false; document.getElementById('wave-display').style.color = "#ff3333"; updateWaveUI();
-            for(let i = 0; i < 10; i++) spawnEnemy(); gameState = 'playing';
+            
+            if (!isOnlineMode) {
+                currentWave = 1; totalZombiesInWave = 10; zombiesKilledThisWave = 0; isWaveBreak = false; document.getElementById('wave-display').style.color = "#ff3333"; updateWaveUI();
+                for(let i = 0; i < 10; i++) spawnEnemy();
+            } else {
+                // Если мы в сети, говорим серверу, что мы воскресли
+                if (socket) socket.emit('respawn');
+            }
+            gameState = 'playing';
         });
 
         const clock = new THREE.Clock();
+
         function animate() {
             requestAnimationFrame(animate); const delta = Math.min(clock.getDelta(), 0.1); const now = Date.now();
             if (gameState === 'playing') {
@@ -359,7 +516,17 @@
                 if (invincTimer > 0) { invincTimer -= delta; buffDisplay.innerText = `🛡️ НЕУЯЗВИМОСТЬ (${Math.ceil(invincTimer)}с)`; if (invincTimer <= 0) { isInvincible = false; buffDisplay.style.opacity = 0; } }
                 weaponGroup.position.lerp(weaponBasePos, 0.15); weaponGroup.rotation.x = THREE.MathUtils.lerp(weaponGroup.rotation.x, 0, 0.15); if (muzzleFlash.intensity > 0) muzzleFlash.intensity -= delta * 15; 
 
-                if (!isWaveBreak && enemies.length < maxZombiesOnMap && (zombiesKilledThisWave + enemies.length) < totalZombiesInWave) { if (Math.random() < 0.05) spawnEnemy(); }
+                // ОТПРАВЛЯЕМ СВОИ КООРДИНАТЫ НА СЕРВЕР (30 раз в секунду)
+                if (isOnlineMode && socket && myId) {
+                    if (now - lastEmitTime > 30) {
+                        socket.emit('playerMovement', { x: camera.position.x, z: camera.position.z, yaw: yaw, pitch: pitch });
+                        lastEmitTime = now;
+                    }
+                }
+
+                if (!isOnlineMode) {
+                    if (!isWaveBreak && enemies.length < maxZombiesOnMap && (zombiesKilledThisWave + enemies.length) < totalZombiesInWave) { if (Math.random() < 0.05) spawnEnemy(); }
+                }
 
                 for (let i = pickups.length - 1; i >= 0; i--) {
                     let p = pickups[i]; p.rotation.y += delta; p.rotation.x += delta * 0.5; p.position.y = 1.0 + Math.sin(now * 0.003) * 0.2;
@@ -387,7 +554,7 @@
                         enemyBox.setFromCenterAndSize(new THREE.Vector3(nextX, 1.0, enemy.position.z), enemySize); let collisionX = false; for(let box of obstacleBoxes) if(enemyBox.intersectsBox(box)) collisionX = true; if (!collisionX) enemy.position.x = nextX;
                         enemyBox.setFromCenterAndSize(new THREE.Vector3(enemy.position.x, 1.0, nextZ), enemySize); let collisionZ = false; for(let box of obstacleBoxes) if(enemyBox.intersectsBox(box)) collisionZ = true; if (!collisionZ) enemy.position.z = nextZ;
                     } else {
-                        if (now - enemy.userData.lastAttack > 1000) { takeDamage(15); enemy.userData.lastAttack = now; enemy.position.addScaledVector(dir, 0.2); setTimeout(() => { if(enemy.parent) enemy.position.addScaledVector(dir, -0.2); }, 100); }
+                        if (now - enemy.userData.lastAttack > 1000) { takeDamageLocally(15); enemy.userData.lastAttack = now; enemy.position.addScaledVector(dir, 0.2); setTimeout(() => { if(enemy.parent) enemy.position.addScaledVector(dir, -0.2); }, 100); }
                     }
                 });
 
