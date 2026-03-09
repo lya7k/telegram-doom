@@ -38,7 +38,6 @@
         
         #kill-counter { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.7); border: 2px solid #ffa500; color: white; padding: 5px 15px; border-radius: 5px; font-weight: 900; font-size: 18px; z-index: 10; text-shadow: 1px 1px 2px #000; }
         
-        /* НОВЫЙ ИНТЕРФЕЙС ДЛЯ ВОЛН */
         #wave-ui { position: absolute; top: 20px; right: 20px; text-align: right; z-index: 10; pointer-events: none; }
         #wave-display { color: #ff3333; font-size: 24px; font-weight: 900; text-shadow: 0 0 5px #000, 0 0 10px #ff0000; margin-bottom: 5px; transition: color 0.3s; }
         #wave-status { color: #fff; font-size: 14px; font-weight: bold; text-shadow: 1px 1px 2px #000; background: rgba(0,0,0,0.7); padding: 5px 10px; border-radius: 5px; border: 1px solid rgba(255,255,255,0.2); }
@@ -47,10 +46,11 @@
 
         #damage-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, rgba(255,0,0,0) 40%, rgba(255,0,0,0.6) 100%); opacity: 0; pointer-events: none; z-index: 5; transition: opacity 0.1s; }
 
-        #game-over-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; pointer-events: auto; opacity: 0; pointer-events: none; transition: opacity 0.5s; }
+        /* ИСПРАВЛЕН БАГ НЕВИДИМОЙ КНОПКИ (Убрано pointer-events: auto с дочерних элементов) */
+        #game-over-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; pointer-events: none; opacity: 0; transition: opacity 0.5s; }
         #game-over-screen h1 { color: #ff3333; font-size: 40px; margin: 0 0 10px 0; text-shadow: 0 0 10px #ff0000; }
         #game-over-screen p { color: white; font-size: 20px; margin: 0 0 30px 0; }
-        #restart-btn { background: #ff3333; color: white; border: none; padding: 15px 40px; font-size: 20px; font-weight: bold; border-radius: 5px; pointer-events: auto; box-shadow: 0 0 10px rgba(255,0,0,0.5); }
+        #restart-btn { background: #ff3333; color: white; border: none; padding: 15px 40px; font-size: 20px; font-weight: bold; border-radius: 5px; cursor: pointer; box-shadow: 0 0 10px rgba(255,0,0,0.5); }
 
         #joy-left { position: absolute; bottom: 30px; left: 30px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2); border-radius: 50%; pointer-events: auto; z-index: 10; backdrop-filter: blur(2px); }
         #joy-stick { position: absolute; top: 30px; left: 30px; width: 60px; height: 60px; background: rgba(255,255,255,0.5); border-radius: 50%; pointer-events: none; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
@@ -76,7 +76,6 @@
         <div id="look-zone"></div>
         <div class="crosshair"><div class="crosshair-v"></div></div>
         
-        <!-- Верхняя панель (Слева: ХП/Оружие, Центр: Фраги, Справа: Волны) -->
         <div id="hud-top">
             <div>
                 <div id="health-container"><div id="health-bar"></div></div>
@@ -189,7 +188,7 @@
             if (audioListener.context.state === 'suspended') audioListener.context.resume();
         }, { once: true });
 
-        // === ЛОГИКА ВОЛН (СЮЖЕТ/ПРОГРЕССИЯ) ===
+        // === ЛОГИКА ВОЛН ===
         let currentWave = 1;
         let totalZombiesInWave = 10; 
         let zombiesKilledThisWave = 0;
@@ -204,7 +203,7 @@
 
         function startNextWave() {
             currentWave++;
-            totalZombiesInWave = 5 + (currentWave * 5); // 10, 15, 20...
+            totalZombiesInWave = 5 + (currentWave * 5); 
             maxZombiesOnMap = Math.min(25, 5 + currentWave * 2);
             zombiesKilledThisWave = 0;
             isWaveBreak = false;
@@ -239,7 +238,9 @@
 
             if (playerHealth === 0) {
                 gameState = 'gameover'; document.getElementById('final-score').innerText = kills; 
-                document.getElementById('game-over-screen').style.opacity = 1; document.getElementById('game-over-screen').style.pointerEvents = 'auto';
+                document.getElementById('game-over-screen').style.opacity = 1; 
+                // ИСПРАВЛЕНИЕ: Кнопка кликабельна ТОЛЬКО после смерти!
+                document.getElementById('game-over-screen').style.pointerEvents = 'auto'; 
                 joyPointerId = null; lookPointerId = null; moveForward = 0; moveRight = 0;
             }
         }
@@ -282,7 +283,31 @@
             if (wInfo.mesh) { currentWeaponObj = wInfo.mesh; weaponGroup.add(currentWeaponObj); }
         }
 
-        // === МОДЕЛИ ЗОМБИ И ИСПРАВЛЕННЫЙ ХИТБОКС ===
+        // === ИСПРАВЛЕНИЕ: АРЕНА И УКРЫТИЯ ГЕНЕРИРУЮТСЯ ДО ЗОМБИ ===
+        const floorMat = new THREE.MeshLambertMaterial({ map: createFloorTexture() }); 
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(ARENA_SIZE, ARENA_SIZE), floorMat); 
+        floor.rotation.x = -Math.PI / 2; scene.add(floor);
+
+        const obstacleBoxes =[]; 
+        const pillarGeo = new THREE.BoxGeometry(4, 8, 4); 
+        const pillarMat = new THREE.MeshLambertMaterial({ map: createWallTexture() }); 
+
+        for(let i=0; i<15; i++) {
+            const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+            let px = (Math.random() - 0.5) * (ARENA_SIZE - 10); let pz = (Math.random() - 0.5) * (ARENA_SIZE - 10);
+            if(Math.abs(px) < 10 && Math.abs(pz) < 10) px += 15; 
+            pillar.position.set(px, 4, pz); scene.add(pillar);
+            obstacleBoxes.push(new THREE.Box3().setFromObject(pillar)); 
+        }
+
+        const playerBox = new THREE.Box3(); const playerSize = new THREE.Vector3(1.6, 2.0, 1.6); 
+        function checkCollision(nx, nz) {
+            playerBox.setFromCenterAndSize(new THREE.Vector3(nx, 1.0, nz), playerSize);
+            for(let box of obstacleBoxes) { if(playerBox.intersectsBox(box)) return true; }
+            return false;
+        }
+
+        // === МОДЕЛИ ЗОМБИ И ХИТБОКС ===
         let zombieModelTemplate = null;
         gltfLoader.load('zombie.glb', function(gltf) {
             let model = gltf.scene;
@@ -316,14 +341,12 @@
         }, undefined, () => console.log("zombie.glb не найден."));
 
         const enemies =[]; 
-        // ИСПРАВЛЕНИЕ: Радиус хитбокса уменьшен с 0.6 до 0.25 (чтобы надо было целиться точно)
         const hitboxGeo = new THREE.CylinderGeometry(0.25, 0.25, 2.0, 8); const hitboxMat = new THREE.MeshBasicMaterial({ visible: false }); 
         const dummyGeo = new THREE.CylinderGeometry(0.4, 0.4, 1.8, 16); const dummyMat = new THREE.MeshLambertMaterial({ color: 0x3d5c3a }); 
 
         function spawnEnemy() {
             const enemyGroup = new THREE.Group();
             enemyGroup.userData.isEnemy = true; 
-            // ХП зомби растет с каждой волной
             enemyGroup.userData.health = 100 + ((currentWave - 1) * 20); 
             enemyGroup.userData.lastAttack = 0; 
 
@@ -345,10 +368,36 @@
                 enemyGroup.add(dummy);
             }
 
+            // ИСПРАВЛЕНИЕ: ЗОМБИ БОЛЬШЕ НЕ ЗАСТРЕВАЮТ В КОЛОННАХ
             let ex, ez;
-            do { ex = (Math.random() - 0.5) * 76; ez = (Math.random() - 0.5) * 76; } while (Math.abs(ex) < 15 && Math.abs(ez) < 15);
+            let validPos = false;
+            let attempts = 0;
+            const tempBox = new THREE.Box3();
+            const tempSize = new THREE.Vector3(1.2, 2.0, 1.2); 
+
+            while (!validPos && attempts < 100) {
+                ex = (Math.random() - 0.5) * 76; 
+                ez = (Math.random() - 0.5) * 76; 
+                
+                // Проверка: не спавним слишком близко к игроку
+                if (Math.abs(ex) < 15 && Math.abs(ez) < 15) { attempts++; continue; }
+                
+                // Проверка: не спавним внутри колонн!
+                tempBox.setFromCenterAndSize(new THREE.Vector3(ex, 1.0, ez), tempSize);
+                let collision = false;
+                for (let box of obstacleBoxes) {
+                    if (tempBox.intersectsBox(box)) { collision = true; break; }
+                }
+                
+                if (!collision) validPos = true;
+                attempts++;
+            }
+
             enemyGroup.position.set(ex, 0, ez); scene.add(enemyGroup); enemies.push(enemyGroup);
         }
+
+        // Спавним 8 зомби просто для фона Главного Меню
+        for(let i = 0; i < 8; i++) spawnEnemy();
 
         // === СИСТЕМА ЛУТА ===
         const pickups =[];
@@ -369,30 +418,6 @@
             const light = new THREE.PointLight(pickupMats[type].color, 0.5, 5); mesh.add(light);
         }
         setInterval(() => { if (!isWaveBreak) spawnPickup(); }, 12000); 
-
-        // === АРЕНА И УКРЫТИЯ ===
-        const floorMat = new THREE.MeshLambertMaterial({ map: createFloorTexture() }); 
-        const floor = new THREE.Mesh(new THREE.PlaneGeometry(ARENA_SIZE, ARENA_SIZE), floorMat); 
-        floor.rotation.x = -Math.PI / 2; scene.add(floor);
-
-        const obstacleBoxes =[]; 
-        const pillarGeo = new THREE.BoxGeometry(4, 8, 4); 
-        const pillarMat = new THREE.MeshLambertMaterial({ map: createWallTexture() }); 
-
-        for(let i=0; i<15; i++) {
-            const pillar = new THREE.Mesh(pillarGeo, pillarMat);
-            let px = (Math.random() - 0.5) * (ARENA_SIZE - 10); let pz = (Math.random() - 0.5) * (ARENA_SIZE - 10);
-            if(Math.abs(px) < 10 && Math.abs(pz) < 10) px += 15; 
-            pillar.position.set(px, 4, pz); scene.add(pillar);
-            obstacleBoxes.push(new THREE.Box3().setFromObject(pillar)); 
-        }
-
-        const playerBox = new THREE.Box3(); const playerSize = new THREE.Vector3(1.6, 2.0, 1.6); 
-        function checkCollision(nx, nz) {
-            playerBox.setFromCenterAndSize(new THREE.Vector3(nx, 1.0, nz), playerSize);
-            for(let box of obstacleBoxes) { if(playerBox.intersectsBox(box)) return true; }
-            return false;
-        }
 
         // === УПРАВЛЕНИЕ И СТРЕЛЬБА ===
         const raycaster = new THREE.Raycaster(); const screenCenter = new THREE.Vector2(0, 0);
@@ -462,33 +487,42 @@
                         scene.remove(rootEnemy); enemies.splice(enemies.indexOf(rootEnemy), 1);
                         kills++; killCounter.innerText = `ФРАГОВ: ${kills}`;
                         
-                        zombiesKilledThisWave++;
-                        updateWaveUI();
+                        // Защита от двойного вызова волны
+                        if (!isWaveBreak) {
+                            zombiesKilledThisWave++;
+                            updateWaveUI();
 
-                        if (zombiesKilledThisWave >= totalZombiesInWave) {
-                            isWaveBreak = true;
-                            document.getElementById('wave-status').innerText = `ВОЛНА ПРОЙДЕНА!`;
-                            document.getElementById('wave-display').style.color = "#00ff00"; // Зеленый цвет победы
-                            
-                            // Спавним заслуженный лут прямо возле игрока (с запасом, чтобы не застрял)
-                            spawnPickup('health', camera.position.x + 2, camera.position.z + 2);
-                            spawnPickup('ammo', camera.position.x - 2, camera.position.z - 2);
+                            if (zombiesKilledThisWave >= totalZombiesInWave) {
+                                isWaveBreak = true;
+                                document.getElementById('wave-status').innerText = `ВОЛНА ПРОЙДЕНА!`;
+                                document.getElementById('wave-display').style.color = "#00ff00"; 
+                                
+                                spawnPickup('health', camera.position.x + 2, camera.position.z + 2);
+                                spawnPickup('ammo', camera.position.x - 2, camera.position.z - 2);
 
-                            setTimeout(() => { if (gameState === 'playing') startNextWave(); }, 5000);
+                                setTimeout(() => { if (gameState === 'playing') startNextWave(); }, 5000);
+                            }
                         }
                     }
                 }
             }
         });
 
-        // === ИГРОВОЙ ЦИКЛ ===
-        const clock = new THREE.Clock();
-
+        // === СТАРТ И РЕСТАРТ ===
         document.getElementById('btn-endless').addEventListener('pointerdown', () => {
             if (tg.requestFullscreen && !tg.isFullscreen) tg.requestFullscreen(); 
             if (audioListener.context.state === 'suspended') audioListener.context.resume();
             document.getElementById('main-menu').style.display = 'none'; document.getElementById('ui-layer').style.display = 'block';
-            currentWave = 1; totalZombiesInWave = 10; zombiesKilledThisWave = 0; isWaveBreak = false; updateWaveUI();
+            
+            // Очищаем фоновых зомби
+            enemies.forEach(e => scene.remove(e)); enemies.length = 0;
+            pickups.forEach(p => scene.remove(p)); pickups.length = 0;
+            
+            currentWave = 1; totalZombiesInWave = 10; zombiesKilledThisWave = 0; isWaveBreak = false; 
+            document.getElementById('wave-display').style.color = "#ff3333"; updateWaveUI();
+            
+            for(let i = 0; i < 10; i++) spawnEnemy(); // Спавним свежую волну 1
+            
             gameState = 'playing'; updateHUD();
         });
 
@@ -496,19 +530,26 @@
             e.preventDefault(); playerHealth = 100; healthBar.style.width = '100%'; kills = 0; killCounter.innerText = `ФРАГОВ: 0`;
             weapons[0].reserve = 48; weapons[1].reserve = 18; weapons[2].reserve = 90;
             ammo = weapons[currentWeaponIdx].maxAmmo; isReloading = false; updateHUD();
-            document.getElementById('game-over-screen').style.opacity = 0; document.getElementById('game-over-screen').style.pointerEvents = 'none';
+            
+            // ИСПРАВЛЕНИЕ БАГА КНОПКИ: Снова выключаем кликабельность экрана смерти!
+            document.getElementById('game-over-screen').style.opacity = 0; 
+            document.getElementById('game-over-screen').style.pointerEvents = 'none'; 
+            
             camera.position.set(0, playerHeight, 0); yaw = 0; pitch = 0;
             
             enemies.forEach(e => scene.remove(e)); enemies.length = 0;
             pickups.forEach(p => scene.remove(p)); pickups.length = 0;
-            
             speedMultiplier = 1.0; isInvincible = false; speedTimer = 0; invincTimer = 0; buffDisplay.style.opacity = 0;
             
             currentWave = 1; totalZombiesInWave = 10; zombiesKilledThisWave = 0; isWaveBreak = false;
             document.getElementById('wave-display').style.color = "#ff3333"; updateWaveUI();
             
+            for(let i = 0; i < 10; i++) spawnEnemy();
             gameState = 'playing';
         });
+
+        // === ИГРОВОЙ ЦИКЛ ===
+        const clock = new THREE.Clock();
 
         function animate() {
             requestAnimationFrame(animate);
@@ -522,9 +563,8 @@
                 weaponGroup.position.lerp(weaponBasePos, 0.15); weaponGroup.rotation.x = THREE.MathUtils.lerp(weaponGroup.rotation.x, 0, 0.15);
                 if (muzzleFlash.intensity > 0) muzzleFlash.intensity -= delta * 15; 
 
-                // Плавный спавн зомби во время волны (если на карте мало врагов)
                 if (!isWaveBreak && enemies.length < maxZombiesOnMap && (zombiesKilledThisWave + enemies.length) < totalZombiesInWave) {
-                    if (Math.random() < 0.02) spawnEnemy(); 
+                    if (Math.random() < 0.05) spawnEnemy(); 
                 }
 
                 for (let i = pickups.length - 1; i >= 0; i--) {
@@ -535,12 +575,11 @@
                         if (p.userData.type === 'ammo') { const w = weapons[currentWeaponIdx]; w.reserve += w.maxAmmo * 2; updateHUD(); }
                         if (p.userData.type === 'speed') activateBuff('speed');
                         if (p.userData.type === 'invincible') activateBuff('invincible');
-                        playSound(sounds.reload); // Звук подбора предмета
+                        playSound(sounds.reload); 
                         scene.remove(p); pickups.splice(i, 1);
                     }
                 }
 
-                // Зомби становятся быстрее с каждой волной!
                 const currentZombieSpeed = 2.5 + (currentWave * 0.2);
 
                 enemies.forEach((enemy, index) => {
