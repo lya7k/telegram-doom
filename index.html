@@ -138,7 +138,7 @@
 
         document.getElementById('btn-leaderboard').addEventListener('pointerdown', () => {
             const lbContent = document.getElementById('lb-content'); lbContent.innerHTML = '';
-            let allPlayers = [...mockTopPlayers]; if (myHighScore > 0) allPlayers.push({ name: tgUsername, score: myHighScore, isMe: true });
+            let allPlayers =[...mockTopPlayers]; if (myHighScore > 0) allPlayers.push({ name: tgUsername, score: myHighScore, isMe: true });
             allPlayers.sort((a, b) => b.score - a.score);
             allPlayers.slice(0, 5).forEach((p, index) => {
                 const row = document.createElement('div'); row.className = p.isMe ? 'lb-row me' : 'lb-row';
@@ -180,7 +180,7 @@
 
 
         // ==========================================
-        // === СЕТЕВАЯ ЛОГИКА (PvP) ===
+        // === СЕТЕВАЯ ЛОГИКА И МАТЧМЕЙКИНГ ===
         // ==========================================
         let socket = null;
         let myId = null;
@@ -188,35 +188,55 @@
         let isOnlineMode = false; 
         let lastEmitTime = 0;
 
+        function updatePvPUI() {
+            if (!isOnlineMode) return;
+            const count = Object.keys(remotePlayers).length + 1; 
+            document.getElementById('wave-status').innerText = `ИГРОКОВ НА КАРТЕ: ${count}/15`;
+        }
+
         function connectToServer() {
-            // ИСПРАВЛЕНИЕ: Пустые скобки означают "подключись к тому IP-адресу, откуда скачалась игра"
             socket = io(); 
             
             socket.on('connect', () => {
                 myId = socket.id;
-                console.log("Успешное подключение к серверу! Твой ID:", myId);
-                // Отправляем свои стартовые координаты, чтобы другие увидели нас в правильном месте
-                socket.emit('playerMovement', { x: camera.position.x, z: camera.position.z, yaw: yaw, pitch: pitch });
+                // Отправляем точную высоту (camera.position.y)
+                socket.emit('playerMovement', { x: camera.position.x, y: camera.position.y, z: camera.position.z, yaw: yaw, pitch: pitch });
+            });
+
+            socket.on('roomJoined', (roomName) => {
+                document.getElementById('wave-display').innerText = `Лобби: ${roomName}`;
+                document.getElementById('wave-display').style.color = "#00ffcc";
             });
 
             socket.on('currentPlayers', (players) => {
                 Object.keys(players).forEach((id) => { if (id !== myId) spawnRemotePlayer(players[id]); });
+                updatePvPUI();
             });
 
-            socket.on('newPlayer', (playerInfo) => { if (playerInfo.id !== myId) spawnRemotePlayer(playerInfo); });
+            socket.on('newPlayer', (playerInfo) => { 
+                if (playerInfo.id !== myId) { spawnRemotePlayer(playerInfo); updatePvPUI(); }
+            });
 
             socket.on('playerMoved', (info) => {
                 if (remotePlayers[info.id]) {
-                    remotePlayers[info.id].position.set(info.x, 0, info.z);
+                    // ИСПРАВЛЕНИЕ: Вычисляем прыжок. Если info.y это 1.6 (пол), то 1.6 - 1.6 = 0.
+                    const targetY = info.y !== undefined ? info.y - playerHeight : 0;
+                    remotePlayers[info.id].position.set(info.x, targetY, info.z);
                     remotePlayers[info.id].rotation.y = info.yaw;
                 }
             });
 
             socket.on('playerDisconnected', (id) => {
-                if (remotePlayers[id]) { scene.remove(remotePlayers[id]); delete remotePlayers[id]; }
+                if (remotePlayers[id]) { scene.remove(remotePlayers[id]); delete remotePlayers[id]; updatePvPUI(); }
             });
 
-            socket.on('playerShot', (id) => { if (remotePlayers[id]) { playSound(sounds.pistol); } });
+            // ИСПРАВЛЕНИЕ: Теперь мы слушаем ИНДЕКС ОРУЖИЯ (data.weaponIdx)
+            socket.on('playerShot', (data) => { 
+                if (remotePlayers[data.id]) { 
+                    const w = weapons[data.weaponIdx] || weapons[0];
+                    playSound(w.snd); 
+                } 
+            });
 
             socket.on('playerDamaged', (data) => {
                 if (data.id === myId) {
@@ -244,10 +264,11 @@
                         kills++; killCounter.innerText = `ФРАГОВ: ${kills}`;
                         if (kills > myHighScore) { myHighScore = kills; localStorage.setItem('webstrike_highscore', myHighScore); }
                     }
+                    updatePvPUI();
                 }
             });
             
-            socket.on('playerRespawned', (info) => { if (info.id !== myId && !remotePlayers[info.id]) { spawnRemotePlayer(info); } });
+            socket.on('playerRespawned', (info) => { if (info.id !== myId && !remotePlayers[info.id]) { spawnRemotePlayer(info); updatePvPUI(); } });
         }
 
         function spawnRemotePlayer(info) {
@@ -256,9 +277,12 @@
             const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 0.4), new THREE.MeshLambertMaterial({color: 0x2266cc, emissive: 0x000000})); body.position.y = 1.0; 
             const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshLambertMaterial({color: 0xffccaa, emissive: 0x000000})); head.position.y = 1.6; 
             const gun = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.6), new THREE.MeshLambertMaterial({color: 0x111111, emissive: 0x000000})); gun.position.set(0.3, 1.0, -0.4); 
-            group.add(body, head, gun); group.position.set(info.x, 0, info.z);
+            
+            const startY = info.y !== undefined ? info.y - playerHeight : 0;
+            group.add(body, head, gun); group.position.set(info.x, startY, info.z);
             scene.add(group); remotePlayers[info.id] = group; 
         }
+        // ==========================================
 
         let currentWave = 1; let totalZombiesInWave = 10; let zombiesKilledThisWave = 0; let maxZombiesOnMap = 10; let isWaveBreak = false;
         function updateWaveUI() { document.getElementById('wave-display').innerText = `ВОЛНА ${currentWave}`; document.getElementById('wave-status').innerText = `ОСТАЛОСЬ ЗОМБИ: ${totalZombiesInWave - zombiesKilledThisWave}`; }
@@ -295,8 +319,6 @@
 
         const floorMat = new THREE.MeshLambertMaterial({ map: createFloorTexture() }); const floor = new THREE.Mesh(new THREE.PlaneGeometry(ARENA_SIZE, ARENA_SIZE), floorMat); floor.rotation.x = -Math.PI / 2; scene.add(floor);
         const obstacleBoxes =[]; const pillarGeo = new THREE.BoxGeometry(4, 8, 4); const pillarMat = new THREE.MeshLambertMaterial({ map: createWallTexture() }); 
-        
-        // ИСПРАВЛЕНИЕ: МАТЕМАТИЧЕСКАЯ ГЕНЕРАЦИЯ КОЛОНН (ОДИНАКОВАЯ ДЛЯ ВСЕХ ИГРОКОВ В СЕТИ)
         for(let i=0; i<15; i++) {
             const pillar = new THREE.Mesh(pillarGeo, pillarMat);
             let px = (Math.sin(i * 123.45) - 0.5) * (ARENA_SIZE - 10); 
@@ -305,7 +327,6 @@
             pillar.position.set(px, 4, pz); scene.add(pillar);
             obstacleBoxes.push(new THREE.Box3().setFromObject(pillar)); 
         }
-        
         const playerBox = new THREE.Box3(); const playerSize = new THREE.Vector3(1.6, 2.0, 1.6); 
         function checkCollision(nx, nz) { playerBox.setFromCenterAndSize(new THREE.Vector3(nx, 1.0, nz), playerSize); for(let box of obstacleBoxes) { if(playerBox.intersectsBox(box)) return true; } return false; }
 
@@ -340,7 +361,6 @@
             mesh.position.set(px, 1.0, pz); mesh.userData.type = type; scene.add(mesh); pickups.push(mesh); const light = new THREE.PointLight(pickupMats[type].color, 0.5, 5); mesh.add(light);
         }
         
-        // В PvP мы пока отключаем спавн аптечек, чтобы не было рассинхрона
         setInterval(() => { if (!isWaveBreak && !isOnlineMode) spawnPickup(); }, 12000); 
 
         const raycaster = new THREE.Raycaster(); const screenCenter = new THREE.Vector2(0, 0); let moveForward = 0; let moveRight = 0; let yaw = 0; let pitch = 0; 
@@ -364,9 +384,11 @@
         document.getElementById('shoot-btn').addEventListener('pointerdown', (e) => {
             e.preventDefault(); if (gameState !== 'playing' || isReloading) return; const now = Date.now(); const w = weapons[currentWeaponIdx];
             if (ammo <= 0) { if (now - lastFireTime > 300) { playSound(sounds.empty); lastFireTime = now; } return; } if (now - lastFireTime < w.fireRate) return; 
+            
             ammo--; lastFireTime = now; updateHUD(); pitch += w.recoil; yaw += (Math.random() - 0.5) * w.recoil * 0.5; weaponGroup.position.z += 0.15; weaponGroup.rotation.x += 0.1; muzzleFlash.intensity = 2; playSound(w.snd); 
 
-            if (isOnlineMode && socket) socket.emit('shoot');
+            // ИСПРАВЛЕНИЕ: Отправляем индекс текущего оружия!
+            if (isOnlineMode && socket) socket.emit('shoot', { weaponIdx: currentWeaponIdx });
 
             raycaster.setFromCamera(screenCenter, camera); 
             const potentialTargets =[...enemies, ...Object.values(remotePlayers)];
@@ -402,7 +424,6 @@
             }
         });
 
-        // БЕЗОПАСНЫЙ СТАРТ ИГРЫ
         function prepareGameEnv() {
             try { if (tg && tg.requestFullscreen && !tg.isFullscreen) tg.requestFullscreen(); } catch(e) {}
             if (audioListener.context.state === 'suspended') audioListener.context.resume();
@@ -418,8 +439,10 @@
                 for(let i = 0; i < 10; i++) spawnEnemy(); 
                 document.getElementById('wave-container').style.display = 'flex';
             } else {
-                document.getElementById('wave-container').style.display = 'none'; 
-                // Ставим случайные координаты старта для PvP
+                document.getElementById('wave-container').style.display = 'flex'; 
+                document.getElementById('wave-display').innerText = "ПОИСК ИГРОКОВ...";
+                document.getElementById('wave-display').style.color = "#00ffcc";
+                document.getElementById('wave-status').innerText = "ПОДКЛЮЧЕНИЕ...";
                 camera.position.x = (Math.random() - 0.5) * 40;
                 camera.position.z = (Math.random() - 0.5) * 40;
             }
@@ -442,7 +465,7 @@
             if (!isOnlineMode) {
                 currentWave = 1; totalZombiesInWave = 10; zombiesKilledThisWave = 0; isWaveBreak = false; document.getElementById('wave-display').style.color = "#ff3333"; updateWaveUI();
                 for(let i = 0; i < 10; i++) spawnEnemy();
-            } else { if (socket) { socket.emit('respawn'); socket.emit('playerMovement', { x: camera.position.x, z: camera.position.z, yaw: yaw, pitch: pitch }); } }
+            } else { if (socket) { socket.emit('respawn'); socket.emit('playerMovement', { x: camera.position.x, y: camera.position.y, z: camera.position.z, yaw: yaw, pitch: pitch }); } }
             gameState = 'playing';
         });
 
@@ -455,9 +478,10 @@
                 if (invincTimer > 0) { invincTimer -= delta; buffDisplay.innerText = `🛡️ НЕУЯЗВИМОСТЬ (${Math.ceil(invincTimer)}с)`; if (invincTimer <= 0) { isInvincible = false; buffDisplay.style.opacity = 0; } }
                 weaponGroup.position.lerp(weaponBasePos, 0.15); weaponGroup.rotation.x = THREE.MathUtils.lerp(weaponGroup.rotation.x, 0, 0.15); if (muzzleFlash.intensity > 0) muzzleFlash.intensity -= delta * 15; 
 
+                // ИСПРАВЛЕНИЕ: Отправляем ИСТИННУЮ координату камеры Y
                 if (isOnlineMode && socket && myId) {
                     if (now - lastEmitTime > 30) {
-                        socket.emit('playerMovement', { x: camera.position.x, z: camera.position.z, yaw: yaw, pitch: pitch }); lastEmitTime = now;
+                        socket.emit('playerMovement', { x: camera.position.x, y: camera.position.y, z: camera.position.z, yaw: yaw, pitch: pitch }); lastEmitTime = now;
                     }
                 }
 
